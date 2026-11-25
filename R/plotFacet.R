@@ -1,0 +1,448 @@
+
+#' Facet Panel Matrix in Base Graphics
+#'
+#' Draws a lattice-like matrix of panels in base graphics with identical
+#' plot region sizes, panel strips, axes on the outer panels only and a
+#' user-supplied panel function for the content. Panel gaps are defined in
+#' margin lines and remain exact, independent of device size and strip
+#' height, as the strip space is reserved separately in the layout.
+#'
+#' The available device area inside the outer margins is partitioned with
+#' [layout()] such that all plot regions have exactly the same
+#' size in inches. The horizontal gap between two adjacent columns is
+#' `horiz` margin lines, the vertical gap between two adjacent rows is
+#' `vert` lines. Since margin lines have the same physical size in
+#' both directions, `horiz == vert` yields visually equal gaps.
+#'
+#' @section Bound and free scales:
+#' By default all panels share one coordinate system, and the axes are
+#' drawn on the outer panels only - the arrangement that makes small
+#' multiples comparable at a glance.
+#'
+#' Passing `xlim = "free"` - or a list of limits, for control over
+#' the individual panels - frees that dimension:
+#' every panel gets its own limits, and with them its own axis, because an
+#' outer axis would no longer describe the panels above or beside it.
+#' The layout answers for this - a freed dimension reserves the full
+#' `mar` on every panel edge that now carries annotation, not just on
+#' the outer ones, so the panels stay equal in size and the tick labels
+#' have room.
+#'
+#' Free scales cost what they free: panels can no longer be compared by
+#' position, only by shape. The natural case is a set of diagnostics of one
+#' model against different predictors - the residual scale is shared and
+#' worth comparing, the predictor scales are not commensurable at all.
+#'
+#' The strip is drawn with [titleRect()] above each panel. Its
+#' height (`line` argument of `titleRect`) is reserved in the top
+#' margin of every panel, so the strip never eats into the gap between the
+#' rows.
+#'
+#' Note that [plot.new()] silently reduces `cex` (and with
+#' it `csi`, the physical size of a margin line) in layouts with more
+#' than two regions, which would make the realized panel margins deviate
+#' from the computed layout. The function therefore controls the character
+#' size deterministically via `cex` (see `...`) and sets the panel
+#' margins in inches (`mai`/`omi`), so that all plot regions are
+#' exactly equal in size.
+#'
+#' @param samples a list of samples, each a list (or data.frame) with
+#'   components `x` and `y`.
+#' @param dim integer vector of length 2, the number of rows and columns
+#'   of the panel matrix, `c(nrow, ncol)`.
+#' @param FUN the panel function, called per panel as
+#'   `FUN(x, y, col, pch, ...)` with a fully set up coordinate
+#'   system. Components of a sample beyond `x` and `y` are
+#'   passed on under their own names, so a panel can carry per-panel data
+#'   of its own - confidence bounds, weights, labels. They are only passed
+#'   to a `FUN` that can accept them (a matching formal, or
+#'   `...`), so panel functions written for the two-component form
+#'   keep working unchanged.
+#' @param main the main title, placed in the outer margin.
+#' @param xlab,ylab the axis labels, placed in the outer margins.
+#' @param xlim,ylim the axis limits. A numeric vector of length 2 (or
+#'   `NULL`, the default, for the range over all samples) binds every
+#'   panel to the same scale. `"free"` gives each panel its own
+#'   scale, taken from its own sample. A *list* of length 2 vectors,
+#'   one per sample, does the same with limits you choose; a list of
+#'   length 1 is recycled. See the section on free scales.
+#' @param horiz the horizontal gap between adjacent columns in margin
+#'   lines.
+#' @param vert the vertical gap between adjacent rows in margin lines.
+#'   Default is `horiz`, yielding physically equal gaps.
+#' @param col the colors for the panels, recycled to the number of
+#'   samples. Default is `hcl.colors(n, "Dark 3")`.
+#' @param bg the background color of the plot regions.
+#' @param strip controls the panel strips: `TRUE` (default) draws strips
+#'   with default settings, `FALSE`/`NULL`/`NA` suppresses them (no
+#'   space is reserved), a named list sets the details. Its element
+#'   `labels` holds the strip labels (default: `names(samples)` where the
+#'   samples are named, otherwise the sequence along `samples`); all
+#'   other elements are passed as arguments to [titleRect()], e.g.
+#'   `list(labels = vars, bg = "steelblue", col = "white", line = 1.5)`.
+#'   The `label` argument of `titleRect()` is set per panel and cannot be
+#'   overridden.
+#' @param grid controls the grid lines, evaluated by [bedrock::callIf]:
+#'   `TRUE` (default) draws grid lines at the positions of
+#'   [graphics::axTicks()] with default settings
+#'   (`col = "grey85", lwd = 0.8`), `FALSE`/`NULL`/`NA`
+#'   suppresses them, a named list is passed as arguments to
+#'   [abline()], e.g. `list(col = "white", lty = "dotted")`.
+#'   The default positions `v` and `h` can be overridden, e.g.
+#'   `list(v = seq(0, 20, 5))`.
+#' @param stamp controls the corner stamp. `.useTheme` (default)
+#'   resolves to `getTheme()$stamp`. `TRUE`/`FALSE`/
+#'   `NULL`, a string, or a named list for [stamp()].
+#' @param \dots further arguments passed to `FUN`. Three graphical
+#'   parameters are picked up here and define the page geometry instead:
+#'   `mar`, the margins around the whole panel matrix in lines,
+#'   `c(bottom, left, top, right)`, default `c(2.5, 2.5, 0.5, 0.5)` (the
+#'   bottom and left margins hold the axis annotation of the outer
+#'   panels); `oma`, the outer margins in lines, holding `xlab`, `ylab`
+#'   and `main`, default `c(3, 3, 4, 1.2)`; and `cex`, the character
+#'   expansion used inside the panels (axis annotation, strip labels,
+#'   panel content) and as unit for the panel margin lines, default 0.66,
+#'   matching R's own reduction in multi-figure layouts (set
+#'   deterministically after each `plot.new()`, see Details). `pch`
+#'   defaults to 16 and is passed to `FUN`.
+#'
+#' @return Invisibly returns a list with the realized geometry:
+#'   `horiz`, `vert`, `strip_line` (reserved strip height
+#'   in lines) and the common plot region size `plot_width_in`,
+#'   `plot_height_in` in inches.
+#'
+#' @examples
+#' samples <- lapply(split(ChickWeight, ChickWeight$Chick)[1:25],
+#'                   function(z) list(x = z$Time, y = z$weight))
+#'
+#' my_panel <- function(x, y, col, pch = 16, ...) {
+#'   points(x, y, pch = pch, col = col)
+#'   abline(lm(y ~ x), lwd = 1)
+#' }
+#'
+#' plotFacet(samples, dim = c(5, 5), FUN = my_panel,
+#'            xlab = "Time", ylab = "Weight", main = "ChickWeight",
+#'            strip = list(bg = "grey80", cex = 0.8))
+#'
+#' # free x scales: mpg against four predictors, each on its own range,
+#' # with a shared y scale. The regression band travels in the samples and
+#' # reaches the panel function under its own names.
+#' vars <- c("disp", "hp", "wt", "qsec")
+#'
+#' samples <- lapply(vars, function(v) {
+#'   ord <- order(mtcars[[v]])
+#'   ci  <- predict(lm(reformulate(v, "mpg"), mtcars), interval = "confidence")
+#'   list(x = mtcars[[v]][ord], y = mtcars$mpg[ord],
+#'        lci = ci[ord, "lwr"], uci = ci[ord, "upr"])
+#' })
+#'
+#' panelBand <- function(x, y, lci, uci, col, pch = 16, ...) {
+#'   polygon(c(x, rev(x)), c(uci, rev(lci)), col = "grey85", border = NA)
+#'   points(x, y, col = col, pch = pch)
+#' }
+#'
+#' plotFacet(setNames(samples, vars), dim = c(2, 2), FUN = panelBand,
+#'           xlim = "free", ylab = "mpg",
+#'           main = "mpg against four predictors")
+#'
+#' @seealso [graphics::layout], [titleRect], [bedrock::callIf]
+#'
+#' @family graphics.layout
+#' @concept facet
+#' @concept panel
+#'
+#' @export
+plotFacet <- function(
+    # --- DATA ---
+    samples,
+    dim,
+    FUN,
+    # --- LABELS ---
+    main = "",
+    xlab = "",
+    ylab = "",
+    # --- AXES ---
+    xlim = NULL,
+    ylim = NULL,
+    # --- STRUCTURE ---
+    horiz = 1,
+    vert = NULL,
+    # --- STYLE ---
+    col = NULL,
+    bg = "grey95",
+    # --- FEATURES ---
+    strip = TRUE,
+    grid = TRUE,
+    # --- FRAMEWORK ---
+    stamp = .useTheme,
+    ...
+) {
+
+  stopifnot(length(dim) == 2, is.list(samples))
+
+  nr <- dim[1]
+  nc <- dim[2]
+  n_panels <- nr * nc
+  n <- length(samples)
+
+  if (n > n_panels)
+    stop("More samples than panels available.")
+
+  # x and y are the contract - everything else in a sample is optional
+  # extra data for the panel function. Checked here because the failure
+  # otherwise surfaces inside the panel call, where it reads as a problem
+  # with FUN.
+  bad <- which(!vapply(samples,
+                       function(z) all(c("x", "y") %in% names(z)),
+                       logical(1L)))
+  if (length(bad))
+    stop(gettextf(
+      "sample %d has no components named 'x' and 'y'; it has: %s",
+      bad[1L], paste(names(samples[[bad[1L]]]), collapse = ", ")),
+      domain = NA)
+
+  if (is.null(col))
+    col <- grDevices::hcl.colors(n, "Dark 3")
+  col <- rep(col, length.out = n)
+
+  # graphical parameters travel through the dots: 'mar', 'oma' and 'cex'
+  # define the page geometry and are consumed here, everything else -
+  # 'pch' included - is handed on to FUN
+  dots <- list(...)
+  mar <- dots[["mar"]] %||% c(2.5, 2.5, 0.5, 0.5)
+  oma <- dots[["oma"]] %||% c(3, 3, 4, 1.2)
+  cex <- dots[["cex"]] %||% 0.66
+  dots[c("mar", "oma", "cex")] <- NULL
+  if (is.null(dots[["pch"]]))
+    dots[["pch"]] <- 16
+  stopifnot(is.numeric(mar), length(mar) == 4L,
+            is.numeric(oma), length(oma) == 4L,
+            is.numeric(cex), length(cex) == 1L)
+
+  # the strip labels are part of the strip specification; a named list of
+  # samples names its own panels, the index is the last resort
+  stripLabels <- NULL
+  if (is.list(strip)) {
+    stripLabels <- strip[["labels"]]
+    strip[["labels"]] <- NULL
+    # nothing but labels given: strips with default settings
+    if (!length(strip))
+      strip <- TRUE
+  }
+  if (is.null(stripLabels))
+    stripLabels <- names(samples) %||% seq_len(n)
+  stripLabels <- rep(stripLabels, length.out = n)
+
+  # margin lines have the same physical size horizontally and vertically
+  # (mai = mar * csi * mex on all four sides), so no aspect correction needed
+  if (is.null(vert))
+    vert <- horiz
+
+  # strip geometry: the titleRect() 'line' argument defines the strip
+  # height in margin lines and must be reserved in the panel layout
+  strip_defaults <- list(bg = "grey85", border = 1, line = 1.2)
+  strip_on <- !isFALSE(strip) && !is.null(strip) && !isNA(strip)
+  strip_line <- if (!strip_on) 0
+                else if (is.list(strip)) strip[["line"]] %||% strip_defaults$line
+                else strip_defaults$line
+
+  # grid defaults; positions v/h are added per panel from axTicks()
+  grid_defaults <- list(col = "grey85", lwd = 0.8)
+
+  xlim <- .facetLim(xlim, samples, "x", n)
+  ylim <- .facetLim(ylim, samples, "y", n)
+
+  free_x <- xlim$free
+  free_y <- ylim$free
+
+  oldpar <- par(no.readonly = TRUE)
+  on.exit(par(oldpar), add = TRUE)
+
+  # deterministic line sizes in inches: full-size lines for the outer
+  # margins, cex-scaled lines for the panel margins (matches what
+  # lineToUser()/titleRect() will use at par("cex") == cex)
+  line_full <- par("cin")[2] * par("lheight")
+  line_in <- line_full * cex
+  din <- par("din")
+
+  # available area inside the outer margins
+  inner_w <- din[1] - (oma[2] + oma[4]) * line_full
+  inner_h <- din[2] - (oma[1] + oma[3]) * line_full
+
+  # margins per column (left to right) and per row (top to bottom), in
+  # lines; the strip belongs to EVERY panel and is reserved in the top
+  # margin, so the visible gap between rows remains exactly 'vert'
+  # a freed dimension puts an axis on every panel, so every panel needs the
+  # annotation margin - not only the outer one
+  left_mars   <- if (free_y) rep(mar[2], nc)
+                 else c(mar[2], rep(horiz / 2, max(0, nc - 1)))
+  right_mars  <- c(rep(horiz / 2, max(0, nc - 1)), mar[4])
+  top_mars    <- strip_line + c(mar[3], rep(vert / 2, max(0, nr - 1)))
+  bottom_mars <- if (free_x) rep(mar[1], nr)
+                 else c(rep(vert / 2, max(0, nr - 1)), mar[1])
+
+  # common plot region size (identical for all panels)
+  plot_w <- (inner_w - sum(left_mars + right_mars) * line_in) / nc
+  plot_h <- (inner_h - sum(top_mars + bottom_mars) * line_in) / nr
+
+  if (plot_w <= 0 || plot_h <= 0)
+    stop("Not enough space for this layout / these margin settings.")
+
+  fig_w <- plot_w + (left_mars + right_mars) * line_in
+  fig_h <- plot_h + (top_mars + bottom_mars) * line_in
+
+  .withGraphicsState({
+
+    lay <- matrix(seq_len(n_panels), nrow = nr, ncol = nc, byrow = TRUE)
+    layout(lay, widths = fig_w, heights = fig_h)
+    # outer margins in inches: independent of any later csi changes
+    par(omi = oma * line_full)
+
+    for (i in seq_len(n_panels)) {
+
+      row_i <- (i - 1) %/% nc + 1
+      col_i <- (i - 1) %%  nc + 1
+
+      # panel margins in inches: par(mar) would be converted with the csi
+      # that plot.new() shrinks in multi-figure layouts, distorting the
+      # plot region sizes
+      par(mai = c(bottom_mars[row_i], left_mars[col_i],
+                  top_mars[row_i],    right_mars[col_i]) * line_in)
+
+      if (i > n) {
+        plot.new()
+        next
+      }
+
+      s <- samples[[i]]
+
+      plot.new()
+      # override the automatic multi-figure cex reduction deterministically
+      par(cex = cex)
+      plot.window(xlim = xlim$lim[[i]], ylim = ylim$lim[[i]])
+      usr <- par("usr")
+
+      # background and grid; default grid positions at the axis ticks,
+      # overridable via grid = list(v = ..., h = ...)
+      rect(usr[1], usr[3], usr[2], usr[4], col = bg, border = NA)
+      callIf(abline, grid,
+             defaults = c(list(v = axTicks(1), h = axTicks(2)),
+                          grid_defaults))
+
+      # axes on the outer panels only - unless the dimension is free, where
+      # every panel carries its own
+      if (free_x || row_i == nr) axis(1)
+      if (free_y || col_i == 1)  axis(2, las = 1)
+
+      # panel content; components beyond x and y travel under their own names
+      do.call(FUN,
+              .panelArgs(FUN, s,
+                         c(list(col = col[i]), dots)))
+      box()
+
+      # strip above the plot region, in the reserved top margin;
+      # 'label' is set per panel and must not be overridden (warn once only)
+      callIf(titleRect, strip,
+             defaults = c(list(label = stripLabels[i]), strip_defaults),
+             forbidden = "label", warn = i == 1)
+    }
+
+    # outer annotation with explicit full-size cex (par("cex") is 'cex' here)
+    if (nzchar(xlab)) mtext(xlab, side = 1, outer = TRUE, line = 1, cex = 1)
+    if (nzchar(ylab)) mtext(ylab, side = 2, outer = TRUE, line = 1, cex = 1)
+    if (nzchar(main)) mtext(main, side = 3, outer = TRUE, line = 1.5, cex = 1.2)
+
+    # the stamp belongs in the corner of the page, not in the corner
+    # inside the outer margins, where it would sit on the axis annotation
+    # of the last panel
+    par(omi = c(0, 0, 0, 0))
+
+  }, stamp = stamp)
+
+  invisible(list(
+    horiz = horiz,
+    vert = vert,
+    free_x = free_x,
+    free_y = free_y,
+    strip_line = strip_line,
+    cex = cex,
+    plot_width_in = plot_w,
+    plot_height_in = plot_h
+  ))
+}
+
+
+# -------------------------------------------------------------------------
+# Axis limits: one range for all panels, or one per panel
+# -------------------------------------------------------------------------
+
+# A list marks the dimension as free. The distinction is carried in the
+# type rather than in a second argument, because a scales = "free" flag
+# would still need the limits from somewhere, and the two would then be
+# able to contradict each other.
+#' @keywords internal
+.facetLim <- function(lim, samples, comp, n) {
+
+  # "free" is not a second way of saying the same thing as a list: it says
+  # the limits come from each sample, which is where they would otherwise
+  # be fetched from by hand at the call site
+  if (identical(lim, "free"))
+    return(list(
+      lim  = lapply(samples, function(z) range(z[[comp]], na.rm = TRUE)),
+      free = TRUE))
+
+  if (is.character(lim))
+    stop('the only string accepted as axis limits is "free"')
+
+  if (is.null(lim))
+    return(list(
+      lim  = rep(list(range(unlist(lapply(samples, `[[`, comp)),
+                            na.rm = TRUE)), n),
+      free = FALSE))
+
+  if (is.list(lim)) {
+
+    if (length(lim) == 1L)
+      lim <- rep(lim, n)
+
+    if (length(lim) != n)
+      stop(gettextf(
+        "axis limits given as a list must have one element per sample (%d), not %d",
+        n, length(lim)), domain = NA)
+
+    if (!all(vapply(lim, function(z) is.numeric(z) && length(z) == 2L,
+                    logical(1L))))
+      stop("each element of the axis limits must be a numeric vector of length 2")
+
+    return(list(lim = lim, free = TRUE))
+  }
+
+  if (!is.numeric(lim) || length(lim) != 2L)
+    stop("axis limits must be a numeric vector of length 2, or a list of them")
+
+  list(lim = rep(list(lim), n), free = FALSE)
+}
+
+
+# -------------------------------------------------------------------------
+# Assemble the panel call
+# -------------------------------------------------------------------------
+
+# Everything in the sample travels to the panel function under its own
+# name, but only what the function can actually receive: a panel written
+# as function(x, y, col, pch, ...) takes everything, one written as
+# function(x, y, col, pch) takes just those four. That keeps samples with
+# extra components from breaking panel functions that predate them.
+#' @keywords internal
+.panelArgs <- function(panelFun, sample, extra) {
+
+  args <- c(as.list(sample), extra)
+  args <- args[!duplicated(names(args))]
+
+  fmls <- names(formals(panelFun))
+
+  if ("..." %in% fmls)
+    return(args)
+
+  args[names(args) %in% fmls]
+}

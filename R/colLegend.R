@@ -1,0 +1,350 @@
+
+#' Add a Color Legend to a Plot
+#'
+#' Draw a color legend (color strip) inside an existing plot region.
+#'
+#' The legend can be positioned either by explicit coordinates or by
+#' keyword placement such as `"topright"` or `"left"`.
+#'
+#' Labels may either be aligned with the edges of the color strip or
+#' centered within the color blocks.
+#'
+#' @param x left x-coordinate of the legend or a keyword specifying
+#'   automatic placement:
+#'   `"bottomright"`, `"bottom"`, `"bottomleft"`,
+#'   `"left"`, `"topleft"`, `"top"`,
+#'   `"topright"`, `"right"`, `"center"`.
+#' @param y top y-coordinate of the legend when `x` is numeric.
+#' @param col vector of colors.
+#' @param labels optional vector of labels, or a list holding the labels
+#'   (element `text`, or the one unnamed element) and their placement
+#'   relative to the color blocks in the element `adj`:
+#'   \describe{
+#'     \item{`"edge"`}{
+#'       (default) Labels are aligned with the strip edges.
+#'     }
+#'     \item{`"center"`}{
+#'       Labels are centered within color blocks.
+#'     }
+#'   }
+#'   E.g. `labels = list(1:5, adj = "center")`.
+#' @param title optional title, or a list holding the title (element
+#'   `text`, or the one unnamed element) and its horizontal adjustment
+#'   in the element `adj` (default 0.5, centered), e.g.
+#'   `title = list("From black to red", adj = 0)`.
+#' @param width width of the legend in user coordinates.
+#' @param height height of the legend in user coordinates.
+#' @param horiz logical; if `TRUE`, draw horizontally.
+#' @param xjust horizontal justification.
+#' @param yjust vertical justification.
+#' @param inset inset distance(s) when keyword positioning is used.
+#' @param region character string specifying the reference region
+#'   used for keyword placement. One of:
+#'   `"plot"`, `"figure"`, or `"device"`.
+#' @param border border color of individual color rectangles.
+#' @param box optional specification of an enclosing box around the
+#'   whole legend. Can be:
+#'   \itemize{
+#'     \item `FALSE`, `NULL`, or `NA`: no box
+#'     \item `TRUE`: draw box with defaults
+#'     \item named list of arguments passed to [rect()]
+#'   }
+#' @param adj text alignment passed to [text()].
+#' @param cex character expansion for labels.
+#' @param ... additional arguments passed to [text()].
+#'
+#' @return
+#' Invisibly returns a list with components:
+#' \describe{
+#'   \item{rect}{
+#'     List describing the color strip geometry with components
+#'     `width`, `height`, `left`, and `top`.
+#'   }
+#'   \item{text}{
+#'     List containing the label coordinates `x` and `y`.
+#'   }
+#' }
+#'
+#' 
+#' @examples
+#' 
+#' plot(1:15,, xlim=c(0,10), type="n", xlab="", ylab="", main="Colorstrips")
+#' 
+#' # A
+#' colLegend(x="right", inset=5, labels=c(1:10))
+#' 
+#' # B: Center the labels
+#' colLegend(x=1, y=9, height=6, col=colorRampPalette(c("blue", "white", "red"),
+#'   space = "rgb")(5), labels=list(1:5, adj = "center"))
+#' 
+#' # C: Outer frame
+#' colLegend(x=3, y=9, height=6, col=colorRampPalette(c("blue", "white", "red"),
+#'   space = "rgb")(5), labels=1:4, box=list(border="grey", lty="dashed"))
+#' 
+#' # D
+#' colLegend(x=5, y=9, height=6, col=colorRampPalette(c("blue", "white", "red"),
+#'   space = "rgb")(10), labels=sprintf("%.1f",seq(0,1,0.1)), cex=0.8)
+#' 
+#' # E: horizontal shape
+#' colLegend(x=1, y=2, width=6, height=0.2, col=rainbow(500), labels=1:5,horiz=TRUE)
+#' 
+#' # F
+#' colLegend(x=1, y=14, width=6, height=0.5, col=colorRampPalette(
+#'   c("black","blue","green","yellow","red"), space = "rgb")(100), 
+#'   horiz=TRUE, box = TRUE)
+#' 
+#' # G
+#' colLegend(x=1, y=12, width=6, height=1, col=colorRampPalette(c("black","blue",
+#'             "green","yellow","red"), space = "rgb")(10), horiz=TRUE, 
+#'             border="black", title=list("From black to red", adj=0))
+#' 
+#' text(x = c(8,0.5,2.5,4.5,0.5,0.5,0.5)+.2, y=c(14,9,9,9,2,14,12), LETTERS[1:7], cex=2)
+#' 
+#' @seealso [graphics::legend]
+#'
+
+#' @family graphics.annotation
+#' @concept annotation
+#' @concept label
+#'
+#'
+#' @export
+colLegend <- function(
+    x,
+    y = NULL,
+    col = rev(heat.colors(100)),
+    labels = NULL,
+    title = NULL,
+    width = NULL,
+    height = NULL,
+    horiz = FALSE,
+    xjust = 0,
+    yjust = 1,
+    inset = 0,
+    region = c("plot", "figure", "device"),
+    border = NA,
+    box = FALSE,
+    adj = NULL,
+    cex = 1,
+    ...
+) {
+  
+  region <- match.arg(region)
+  
+  # labels and title: the bare text, or a list with the text and details
+  labelSpec <- .valueSpec(labels, "text", list(adj = "edge"), arg = "labels")
+  labels    <- labelSpec$text
+  labelAdj  <- match.arg(labelSpec$adj, c("edge", "center"))
+  
+  titleSpec <- .valueSpec(title, "text", list(adj = 0.5), arg = "title")
+  title     <- titleSpec$text
+  titleAdj  <- titleSpec$adj
+  
+  if (is.null(adj)) {
+    adj <- if (horiz) c(0.5, 1) else c(1, 0.5)
+  }
+  
+  usr <- par("usr")
+  
+  if (is.null(width))
+    width <- strwidth("mn", cex = cex)
+  
+  if (is.null(height))
+    height <- (usr[4] - usr[3]) *
+    if (horiz) 0.08 else 0.92
+  
+  # --- positioning ---------------------------------------------------
+  
+  if (is.character(x)) {
+    
+    xy <- abcCoords(
+      x      = x,
+      region = region,
+      cex    = cex,
+      inset  = inset
+    )
+    
+    left <- switch(
+      x,
+      right = ,
+      topright = ,
+      bottomright = xy$xy$x - width,
+      
+      center = ,
+      top = ,
+      bottom = xy$xy$x - width / 2,
+      
+      xy$xy$x
+    )
+    
+    top <- switch(
+      x,
+      bottom = ,
+      bottomleft = ,
+      bottomright = xy$xy$y + height,
+      
+      center = ,
+      left = ,
+      right = xy$xy$y + height / 2,
+      
+      xy$xy$y
+    )
+    
+  } else {
+    
+    left <- x - xjust * width
+    top  <- y + (1 - yjust) * height
+    
+  }
+  
+  # coordinates returned invisibly
+  xLbl <- yLbl <- NULL
+  
+  # --- graphics ------------------------------------------------------
+  
+  .withGraphicsState({
+    
+    par(xpd = TRUE)
+    
+    nCol <- length(col)
+    nLbl <- length(labels)
+    
+    # --- draw rectangles ---------------------------------------------
+    
+    if (horiz) {
+      
+      breaks <- seq(0, width, length.out = nCol + 1)
+      
+      rect(
+        xleft   = left + breaks[-length(breaks)],
+        xright  = left + breaks[-1],
+        ybottom = top - height,
+        ytop    = top,
+        col     = col,
+        border  = border
+      )
+      
+    } else {
+      
+      breaks <- seq(0, height, length.out = nCol + 1)
+      
+      rect(
+        xleft   = left,
+        xright  = left + width,
+        ybottom = top - breaks[-1],
+        ytop    = top - breaks[-length(breaks)],
+        col     = rev(col),
+        border  = border
+      )
+      
+    }
+    
+    # --- labels ------------------------------------------------------
+    
+    if (!is.null(labels)) {
+      
+      if (horiz) {
+        
+        if (labelAdj == "center") {
+          
+          if (nLbl > 1L) {
+            xLbl <- left + width / (2 * nCol) + (width - width / nCol) /
+              (nLbl - 1L) * seq(0, nLbl - 1L)
+            
+          } else {
+            xLbl <- left + width / 2
+          }
+          
+        } else {
+          if (nLbl > 1L) {
+            xLbl <- left + width / (nLbl - 1L) * seq(0, nLbl - 1L)
+          } else {
+            xLbl <- left + width / 2
+          }
+          
+        }
+        
+        yLbl <- top - height - max(strheight(labels, cex = cex)) * 1.2
+        
+      } else {
+        
+        if (labelAdj == "center") {
+          
+          if (nLbl > 1L) {
+            yLbl <- top - height / (2 * nCol) - (height - height / nCol) /
+              (nLbl - 1L) * seq(0, nLbl - 1L)
+            
+          } else {
+            yLbl <- top - height / 2
+            
+          }
+          
+        } else {
+          if (nLbl > 1L) {
+            yLbl <- top - height / (nLbl - 1L) * seq(0, nLbl - 1L)
+            
+          } else {
+            yLbl <- top - height / 2
+            
+          }
+        }
+        
+        yLbl <- rev(yLbl)
+        
+        xLbl <- left + width + strwidth("0", cex = cex) +
+                  max(strwidth(labels, cex = cex)) * adj[1]
+        
+      }
+      
+      text(
+        x = xLbl, y = yLbl, labels = labels,
+        adj = adj, cex = cex, ...
+      )
+      
+    }
+    
+    # --- enclosing box -----------------------------------------------
+    
+    callIf(
+      rect,
+      box,
+      defaults = list(
+        xleft   = left,
+        xright  = left + width,
+        ytop    = top,
+        ybottom = top - height,
+        col     = NA
+      ),
+      forbidden = "col"
+    )
+    
+    # --- title -------------------------------------------------------
+    
+    if (!is.null(title)) {
+      
+      text(
+        x = left + width * titleAdj,
+        y = top + strheight("M", cex = cex) * 1.4,
+        labels = title,
+        adj = c(titleAdj, 0),
+        cex = cex
+      )
+      
+    }
+    
+  }, stamp=NULL)
+  
+  invisible(list(
+    rect = list(
+      width = width,
+      height = height,
+      left = left,
+      top = top
+    ),
+    text = list(
+      x = xLbl,
+      y = yLbl
+    )
+  ))
+  
+}

@@ -1,0 +1,127 @@
+
+#' Bézier Geometry
+#'
+#' Create a Bézier curve from a set of control points.
+#'
+#' @param x,y numeric vectors of control points.
+#'   Alternatively, `x` may be a list with components
+#'   `x` and `y`.
+#' @param nPoints number of points used to approximate the curve.
+#'
+#' @return
+#' An object inheriting from class
+#' `"bezierGeometry"`.
+#'
+#' @references
+#' Farin, G. (1993).
+#' *Curves and Surfaces for Computer Aided Geometric Design*.
+#' Academic Press.
+#'
+#' @seealso [graphics::lines]
+#'
+#' @examples
+#' canvas(xlim = c(0, 1))
+#'
+#' lines(
+#'   bezier(
+#'     x = c(0, 0.5, 1),
+#'     y = c(0, 1, 0)
+#'   ),
+#'   col = "red",
+#'   lwd = 2
+#' )
+#'
+
+
+#' @family geometry.structures
+#' @concept geometry
+#' @concept numerical-methods
+#'
+#'
+#' @export
+bezier <- function(
+    x,
+    y = NULL,
+    nPoints = 100
+) {
+  
+  if(is.list(x)) {
+    
+    if(length(x) != 2L)
+      stop("'x' must be a list with components x and y.")
+    
+    y <- x[[2L]]
+    x <- x[[1L]]
+    
+  }
+  
+  if(length(x) != length(y))
+    stop("'x' and 'y' must have equal length.")
+  
+  if(length(x) < 3L)
+    stop("At least 3 control points are required.")
+  
+  if(!is.numeric(nPoints) ||
+     length(nPoints) != 1L ||
+     is.na(nPoints) ||
+     nPoints < 2L ||
+     nPoints %% 1 != 0)
+    stop("'nPoints' must be an integer >= 2.")
+  
+  n <- length(x)
+  
+  X <- Y <- numeric(nPoints)
+  
+  Z <- seq(
+    0,
+    1,
+    length.out = nPoints
+  )
+  
+  X[1L] <- x[1L]
+  X[nPoints] <- x[n]
+  
+  Y[1L] <- y[1L]
+  Y[nPoints] <- y[n]
+  
+  if(nPoints > 2L) {
+    
+    for(i in 2:(nPoints - 1L)) {
+      
+      z <- Z[i]
+      
+      xz <- yz <- 0
+      
+      const <- (1 - z)^(n - 1L)
+      
+      for(j in 0:(n - 1L)) {
+        
+        xz <- xz + const * x[j + 1L]
+        yz <- yz + const * y[j + 1L]
+        
+        const <- const *
+          (n - 1L - j) /
+          (j + 1L) *
+          z /
+          (1 - z)
+        
+      }
+      
+      X[i] <- xz
+      Y[i] <- yz
+      
+    }
+    
+  }
+  
+  .newGeometry(
+    x = X,
+    y = Y,
+    class = c(
+      "bezierGeometry",
+      "lineGeometry"
+    )
+  )
+  
+}
+

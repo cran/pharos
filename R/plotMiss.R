@@ -1,0 +1,148 @@
+
+#' Plot Missing Data 
+#' 
+#' Takes a data frame and displays the location of missing data. The missings
+#' can be clustered and be displayed together. 
+#' 
+#' A graphical display of the position of the missings can be help to detect
+#' dependencies or patterns within the missings. 
+#' 
+#' @param x a data.frame to be analysed. 
+#' @param col the colour of the missings. 
+#' @param bg the background colour of the plot. 
+#' @param cluster logical, defining if the missings should be clustered. Default
+#' is `FALSE`. 
+#' @param main main title. `NULL` (default) draws none, unless the
+#'   theme sets `autoTitle = TRUE` (see [theme]); the title is then
+#'   derived from the expression passed as `x`. `""`, `NA` or `FALSE` always
+#'   suppress it and compact the top margin; any other string is used
+#'   as given.
+#' @param \dots the dots are passed to [plot()]. 
+#' @param stamp controls the corner stamp. `.useTheme` (default)
+#'   resolves to `getTheme()$stamp`. `TRUE`/`FALSE`/
+#'   `NULL`, a string, or a named list for [stamp()].
+#' @return if `cluster` is set to TRUE, the new order will be returned invisibly.
+#' @note Following an idea of Henk Harmsen <henk@@carbonmetrics.com> 
+#' @seealso [hclust()], [bedrock::countCompCases()] 
+#' 
+#' @examples
+#' 
+#' plotMiss(airquality, main="Missing data (in orignal order)")
+#' plotMiss(airquality, main="Missing data (clustered)", cluster=TRUE)
+#'
+
+
+
+#' @family plot.special  
+#' @concept missing-value
+#'
+#'
+#' @export 
+plotMiss <- function(
+    # DATA
+    x,
+
+    # LABELS
+    main = NULL,
+
+    # STRUCTURE
+    cluster = FALSE,
+
+    # STYLE
+    col = "deeppink4",
+    bg  = fade("navajowhite3", 0.3),
+
+    # FRAMEWORK
+    stamp = .useTheme,
+
+    ...
+){
+  
+  .withGraphicsState({
+
+    .applyParFromDots(...)
+    
+    # special handling for cex
+    cex <- bedrock::getDotsArg(list(...), "cex", par("cex"))
+    
+    
+    main <- .resolveTitle(main, default = deparse1(substitute(x)))
+    
+    x <- as.data.frame(x)
+    if(ncol(x) > 1)
+      x <- x[, ncol(x):1]
+    n <- ncol(x)
+
+    
+    missingIndex <- as.matrix(is.na(x))
+    miss <- apply(missingIndex, 2, sum)
+    
+    
+    right.labels <- gettextf(
+      "%s (%s)",
+      miss,
+      sprintf("%.1f%%",
+              100 * miss/nrow(missingIndex))
+    )
+    
+    rmar <- max(
+      2.1,
+      .marginLines(
+        right.labels,
+        side = 4,
+        cex = cex,
+        pad = 1
+      )
+    )
+    
+    lmar <- .marginLines(
+      colnames(x),
+      side = 2,
+      cex = cex,
+      las = 1,
+      pad = 2
+    )
+    
+    canvas(xlim=c(0, nrow(x)+1), ylim=c(0, n), 
+           asp=NA, xpd=TRUE, mar = c(5.1, lmar, .marTop(main), rmar), 
+           main=main, bg=bg, ...)
+    
+    axis(side = 1)
+    
+    
+    if(cluster){
+      orderIndex <- order.dendrogram(
+                       as.dendrogram(hclust(dist(missingIndex * 1), 
+                                             method = "mcquitty")))
+      missingIndex <- missingIndex[orderIndex, ]
+      res <- orderIndex
+    } else {
+      res <- NULL
+    }
+    
+    sapply(1:ncol(missingIndex), function(i){
+      xl <- which(missingIndex[,i])
+      if(length(xl) > 0)
+        rect(xleft=xl, xright=xl+1, ybottom=i-1, ytop=i, col=col, border=NA)
+    })
+    
+    abline(h=1:ncol(x), col="white")
+    
+    
+    # print(par("cex"))
+    # print(par("cex.axis"))
+    
+    mtext(side = 2, text = colnames(x), at = (1:n)-0.5, las=1, adj = 1,
+          line = 1, cex = cex)
+    mtext(side = 4, text = gettextf("%s (%s)", miss, 
+                                    sprintf("%.1f%%", 
+                                            100 * miss/nrow(missingIndex))),
+          at = (1:n)-0.5, las=1, adj = 0, line = 1, cex = cex)
+
+  invisible(res)
+  
+  }, stamp = stamp)
+  
+}
+
+

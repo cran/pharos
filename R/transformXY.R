@@ -1,0 +1,84 @@
+
+#' Apply Geometric Transformations to Coordinates
+#'
+#' Applies scaling, rotation, and translation to a set of 2D coordinates.
+#' The transformations are applied in the following order:
+#' \enumerate{
+#'   \item Scaling
+#'   \item Rotation (see [rotate()])
+#'   \item Translation
+#' }
+#'
+#' @param x numeric vector of x coordinates, or an object coercible by
+#'   [xy.coords()].
+#' @param y numeric vector of y coordinates. Ignored if `x` already
+#'   contains both coordinates.
+#' @param translate numeric vector of length 1 or 2 specifying translation
+#'   in x and y direction. Recycled if necessary. Default is `c(0, 0)`.
+#' @param scale numeric vector of length 1 or 2 specifying scaling factors
+#'   for x and y. Recycled if necessary. Default is `c(1, 1)`.
+#' @param theta rotation angle in radians. Default is `0`.
+#' @param asp aspect ratio adjustment passed to [rotate()].
+#'   Default is `1`.
+#'
+#' @details
+#' This function is a convenience wrapper combining basic affine transformations.
+#' Internally, it uses [rotate()] for rotation.
+#'
+#' @return A list with components `x` and `y`, as returned by
+#'   [xy.coords()].
+#'
+#' @examples
+#' x <- c(0, 1, 1, 0)
+#' y <- c(0, 0, 1, 1)
+#'
+#' # scale, rotate and translate a square
+#' transformXY(x, y,
+#'             scale = 2,
+#'             theta = pi / 4,
+#'             translate = c(1, 1))
+#'
+#' # matrix input
+#' m <- cbind(x, y)
+#' transformXY(m, scale = 0.5, theta = pi/6)
+#'
+#'
+#' @family geometry.transformation
+#' @concept geometry
+#' @concept numerical-methods
+#'
+#'
+#' @export
+transformXY <- function(x, y = NULL,
+                        translate = c(0, 0),
+                        scale = c(1, 1),
+                        theta = 0,
+                        asp = 1) {
+  
+  # --- Validation ---
+  if (!is.numeric(theta) || length(theta) != 1)
+    stop("'theta' must be a single numeric value.")
+  
+  if (!is.numeric(asp) || length(asp) != 1)
+    stop("'asp' must be a single numeric value.")
+  
+  xy <- xy.coords(x, y)
+  
+  translate <- rep_len(translate, 2)
+  scale <- rep_len(scale, 2)
+  
+  # --- Scaling ---
+  xy$x <- xy$x * scale[1]
+  xy$y <- xy$y * scale[2]
+  
+  # --- Rotation (floating point safe) ---
+  if (!isTRUE(all.equal(theta, 0))) {
+    xy <- rotate(xy$x, xy$y, theta = theta, asp = asp)
+  }
+  
+  # --- Translation ---
+  xy$x <- xy$x + translate[1]
+  xy$y <- xy$y + translate[2]
+  
+  return(xy)
+}

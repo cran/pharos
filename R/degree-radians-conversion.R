@@ -1,0 +1,38 @@
+
+#' Convert Degrees to Radians and Vice Versa 
+#' 
+#' Convert degrees to radians (and back again). 
+#' 
+#' @name degree-radians-conversion
+#' @aliases degToRad radToDeg
+#' @param deg a vector of angles in degrees. 
+#' @param rad a vector of angles in radians. 
+#' @return degToRad returns a vector of the same length as `deg` with the
+#' angles in radians.\cr radToDeg returns a vector of the same length as
+#' `rad` with the angles in degrees. 
+#' 
+
+
+#' @examples
+#' 
+#' degToRad(c(90,180,270))
+#' radToDeg( c(0.5,1,2) * pi)
+#' 
+
+
+
+#' @rdname degree-radians-conversion
+
+#' @family geometry.conversion
+#' @concept geometry
+#' @concept numerical-methods
+#'
+#'
+#' @export
+degToRad <- function(deg) deg * pi /180
+
+
+#' @rdname degree-radians-conversion
+#' @export
+radToDeg <- function(rad) rad * 180 / pi
+

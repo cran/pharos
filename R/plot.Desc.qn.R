@@ -1,0 +1,391 @@
+
+#' Plot Method for Numeric-Categorical `Desc` Objects
+#'
+#' Visualises the relationship between a numeric variable and a categorical
+#' variable, as computed by `DescToolsX::desc(y ~ x)` (or `x ~ y`) for
+#' a numeric/categorical pair. Five panel types are available, selectable
+#' (and combinable) via `which`.
+#'
+#' @param x an object of class `"Desc.qn"`, as returned by
+#'   `DescToolsX::desc()` for a numeric-categorical pair.
+#'
+#' @param main main title. `NULL` (default) derives a title per panel
+#'   from the variable names and the panel type (e.g.
+#'   `"area ~ delivery_min (Spineplot)"`), regardless of the theme's
+#'   `autoTitle`. `""`, `NA`, or
+#'   `FALSE` suppress the title and compact the top margin. Any other
+#'   string is used as-is, identically for every selected panel.
+#' @param xlab x-axis label. `NULL` (default) derives a label specific
+#'   to each panel: the numeric variable for panels 1, 2, 3 and 5, the
+#'   categorical variable for panel 4 (boxplot, groups on the x-axis).
+#'   Supplying a value overrides this for every selected panel.
+#' @param ylab y-axis label. `NULL` (default) derives a label specific
+#'   to each panel (e.g. `"P(y)"` for the conditional density,
+#'   `"Density"` for the grouped density plot). Supplying a value
+#'   overrides this for every selected panel.
+#'
+#' @param which integer vector selecting one or more panels to draw, in the
+#'   given order. One or more of:
+#'   \describe{
+#'     \item{`1`}{Conditional density plot ([graphics::cdplot()]).}
+#'     \item{`2`}{Spineplot ([graphics::spineplot()]).
+#'       Default.}
+#'     \item{`3`}{Overlapping kernel density curves, one per group
+#'       (via [plotDens()]).}
+#'     \item{`4`}{Boxplot of the numeric variable by group (via
+#'       [plotBox()]).}
+#'     \item{`5`}{Prevalence (with Wilson confidence intervals) across
+#'       quantile bins of the numeric variable. Only available when the
+#'       categorical variable is binary (`k == 2`); a message is
+#'       issued and the panel skipped otherwise.}
+#'   }
+#'   Selecting multiple panels does not change the plotting layout (no
+#'   implicit `mfrow`) - arranging multiple panels on one device is
+#'   left to the caller (e.g. `par(mfrow = c(2, 1))` beforehand).
+#' @param verbose integer; currently computed from
+#'   `x$meta$verbose`/`getOption("DescTools.verbose")` for
+#'   consistency with other `plot.Desc.*` methods, but not yet
+#'   consulted to pick a default `which`.
+#'
+#' @param col color specification. `.useTheme` (default) resolves a
+#'   panel-appropriate default rather than one shared color, since fill
+#'   ramps, categorical sets, and single accents are different things:
+#'   \describe{
+#'     \item{panels 1/2}{a grey ramp from `"grey30"` to `"grey90"`,
+#'       sized to the number of categorical levels (not theme-driven by
+#'       design, to keep the unordered category fill neutral - see
+#'       [plotMosaic()] for the same rationale).}
+#'     \item{panels 3/4}{`pal(getTheme()$palette)`, the active theme's
+#'       qualitative palette, sized to the number of levels.}
+#'     \item{panel 5}{`getTheme()$twin[1]`, the active theme's primary
+#'       accent color.}
+#'   }
+#'   Supplying `col` explicitly overrides the default uniformly for
+#'   every selected panel.
+#' @param box controls the plot frame for panels 4 and 5.
+#'   `.useTheme` (default) follows the active theme
+#'   (`getTheme()$box`); `FALSE`/`NA` suppress it; a named
+#'   list overrides [graphics::box()] arguments. Panels 1/2
+#'   (`cdplot()`/`spineplot()`) have no effect from this
+#'   argument - they always draw their native frame unconditionally, with
+#'   no toggle to override it. Panel 4 ([plotBox()]) always
+#'   draws its own frame regardless of this argument. Panel 3
+#'   ([plotDens()]) never draws a frame, regardless of this
+#'   argument.
+#' @param legend controls the legend for panel 3 (grouped density curves).
+#'   `TRUE` (default) draws a legend with the group levels.
+#'   `FALSE`/`NA` suppresses it. A named list overrides arguments
+#'   forwarded to [graphics::legend()]. Has no effect on the
+#'   other panels.
+#'
+#' @param stamp controls the corner stamp. `.useTheme` (default)
+#'   resolves to `getTheme()$stamp`, drawn once after all selected
+#'   panels (panels 3/4 delegate to [plotDens()]/
+#'   [plotBox()], whose own stamp is suppressed internally to
+#'   avoid a duplicate). `TRUE`/`FALSE`/`NULL`, a string, or
+#'   a named list for [stamp()].
+#'
+#' @param ... further graphical parameters, passed to [par()] via
+#'   the internal framework and to the underlying panel-drawing functions
+#'   (`cdplot()`, `spineplot()`, [plotDens()],
+#'   [plotBox()], or [graphics::plot()], depending on
+#'   the selected panel).
+#'
+#' @details
+#' The left margin is sized automatically from the longest of: the
+#' (possibly panel-specific) y-axis labels, and - for panels 1/2 - the
+#' categorical level names drawn as axis tick labels, so neither is ever
+#' clipped regardless of `which`.
+#'
+#' @return Invisibly returns `x`.
+#'
+#' @examples
+#' # the object is built by hand here; normally DescToolsX::desc(y ~ x)
+#' # returns it for a numeric-categorical pair
+#' d <- structure(list(
+#'   res  = list(xOk  = ToothGrowth$len,
+#'               yOk  = ToothGrowth$supp,
+#'               lvls = levels(ToothGrowth$supp),
+#'               k    = nlevels(ToothGrowth$supp)),
+#'   meta = list(xname = "len", yname = "supp")
+#' ), class = "Desc.qn")
+#'
+#' plot(d)                 # spineplot
+#' plot(d, which = 3)      # density by group
+#' plot(d, which = 4)      # boxplot by group
+#'
+#' @seealso `DescToolsX::desc`, [plotDens()], [plotBox()],
+#'   [graphics::cdplot()], [graphics::spineplot()]
+#'
+#' @family plot.s3  
+#' @concept distribution-summary
+#'
+#' @rdname plot.Desc.qn
+#' @exportS3Method
+#' @rawNamespace export(plot.Desc.qn)
+# Both tags above are required, not redundant - see plot.Desc.table for
+# the full explanation, or design_rules.md, "Exporting S3 Methods
+# Callable From Other Packages".
+plot.Desc.qn <- function(x,
+                         
+                         # LABELS
+                         main = NULL,
+                         xlab = NULL,
+                         ylab = NULL,
+                         
+                         # STRUCTURE
+                         which   = 2,
+                         verbose = NULL,
+                         
+                         # STYLE
+                         col = .useTheme,
+                         box = .useTheme,
+                         
+                         # FEATURES
+                         legend = TRUE,
+                         
+                         # FRAMEWORK
+                         stamp = .useTheme,
+                         
+                         ...) {
+  
+  verbose <- verbose %||% x$meta$verbose %||%
+    getOption("DescTools.verbose", default = 2L)
+  
+  isBinary <- x$res$k == 2L
+  
+  xOk  <- x$res$xOk
+  yOk  <- x$res$yOk
+  lvls <- x$res$lvls
+  xLab <- x$meta$xname %||% "x"
+  yLab <- x$meta$yname %||% "y"
+  
+  # --- per-panel y-axis label, known upfront from 'which' alone -------------
+  # case 4 (boxplot(xOk ~ yOk)): the y-axis shows xOk, so its label is xLab,
+  # not yLab - boxplot's grouping variable (yOk) is on the x-axis instead.
+  .ylabFor <- function(w) {
+    switch(as.character(w),
+           "1" = "",
+           "2" = "",
+           "3" = "Density",
+           "4" = xLab,
+           "5" = sprintf("P(\"%s\")", lvls[2L]),
+           yLab
+    )
+  }
+  
+  # If the user supplied ylab explicitly, it applies to every panel as-is;
+  # otherwise each panel derives its own label via .ylabFor().
+  resolveYlab <- function(w) ylab %||% .ylabFor(w)
+  
+  # x-axis likewise. xlab must be a formal: passed through ... it collided
+  # with the panel default ("formal argument 'xlab' matched by multiple
+  # actual arguments"). Panel 4 has the groups on its x-axis.
+  resolveXlab <- function(w) xlab %||% if (w == 4) yLab else xLab
+  
+  ylabs <- vapply(which, resolveYlab, character(1))
+  
+  # cases 1/2 (cdplot/spineplot) additionally draw the y-level names
+  # (e.g. "Brent"/"Camden"/"Westminster") as axis tick labels - account
+  # for those when sizing the left margin, or they get clipped.
+  tickLabels <- if (any(which %in% c(1, 2))) as.character(lvls) else character(0)
+  lmar <- max(4.1, .marginLines(tickLabels, side = 2, las = 1, pad = 1))
+  
+  # default title: variable names via the same "substitute magic" convention
+  # used elsewhere (e.g. plotXY's "y ~ x"), combined with a panel-type label
+  # for context when called interactively.
+  .panelDefault <- function(label) sprintf("%s ~ %s (%s)", yLab, xLab, label)
+  
+  .withGraphicsState({
+    
+    .applyParFromDots(
+      ...,
+      defaults = list(mar = c(bottom = 5, left = lmar, top = .marTop(main), right = 3.1))
+    )
+    
+    # the panel type is shown nowhere else, so these titles are always on
+    .main <- function(default) .resolveTitle(main, default = default,
+                                             always = TRUE)
+    
+    # Colors resolved per panel type, not forced through one shared 'col':
+    # a fill ramp (1/2), a categorical set (3/4), and a single accent (5)
+    # are different things, not interchangeable. 'col' stays one
+    # user-facing argument; resolveCol() picks the right default per panel.
+    colSpineDefault <- colorRampPalette(c("grey30", "grey90"))(length(lvls))
+    colCatDefault   <- pal(getTheme()$palette, n = length(lvls))
+    colPtDefault    <- getTheme()$twin[1]
+    
+    resolveCol <- function(default) {
+      if (identical(col, .useTheme)) default else col
+    }
+    
+    
+    for (w in which) {
+      
+      switch(as.character(w),
+             
+             # ── 1: Conditional density plot ─────────────────────────────────
+             "1" = {
+               cdplot(yOk ~ xOk,
+                      col  = resolveCol(colSpineDefault),
+                      xlab = resolveXlab(1),
+                      ylab = resolveYlab(1),
+                      main = .main(.panelDefault("Conditional density")),
+                      ...)
+               
+               axis(side = 1, labels = NA, col.ticks = NA)
+               axis(side = 4, labels = NA, col.ticks = NA)
+             },
+             
+             # ── 2: Spineplot ─────────────────────────────────────────────────
+             "2" = {
+               spineplot(yOk ~ xOk,
+                         col  = resolveCol(colSpineDefault),
+                         xlab = resolveXlab(2),
+                         ylab = resolveYlab(2),
+                         main = .main(.panelDefault("Spineplot")),
+                         ...)
+               
+               axis(side = 1, labels = NA, col.ticks = NA)
+               axis(side = 4, labels = NA, col.ticks = NA)
+             },
+             
+             # ── 3: Overlapping density per group ────────────────────────────
+             "3" = {
+               colHere <- resolveCol(colCatDefault)
+               split_x <- split(xOk, yOk)
+               
+               # plotDens() predates the .useTheme sentinel rollout - it
+               # still resolves grid color/style via its own .theme() call
+               # (which does follow getTheme()), but doesn't understand the
+               # .useTheme sentinel object itself, so a plain TRUE is passed
+               # here rather than the sentinel. It also has no legend or box
+               # parameter; both are added manually below. A box cannot be
+               # retrofitted after the call - plotDens() restores its own
+               # par() state on exit, so a .drawBox() here would draw into
+               # the wrong (already-restored) graphics state.
+               pharos::plotDens(
+                 split_x,
+                 main = .main(.panelDefault("Density by group")),
+                 xlab = resolveXlab(3),
+                 ylab = resolveYlab(3),
+                 col  = colHere,
+                 grid = TRUE,
+                 stamp = NA, 
+                 ...
+               )
+               
+               bedrock::callIf(
+                 graphics::legend,
+                 legend,
+                 defaults = .legendDefaults(list(
+                   x      = "topright",
+                   legend = names(split_x),
+                   col    = colHere,
+                   lty    = 1L
+                 ))
+               )
+             },
+             
+             
+             # ── 4: Boxplot ───────────────────────────────────────────────────
+             "4" = {
+               # plotBox() always draws its frame (box() is unconditional,
+               # no toggle exists) - 'box' has no effect here.
+               pharos::plotBox(
+                 x    = xOk,
+                 groups    = yOk,
+                 main = .main(.panelDefault("Boxplot")),
+                 xlab = resolveXlab(4),
+                 ylab = resolveYlab(4),
+                 col  = resolveCol(colCatDefault),
+                 grid = TRUE,
+                 stamp = NA, 
+                 ...
+               )
+             },
+             
+             
+             # ── 5: Prevalence + Wilson-CI along x (binary only) ─────────────
+             "5" = {
+               if (!isBinary) {
+                 message("which=5 (prevalence plot) is only available for binary y")
+                 next
+               }
+               
+               colHere <- resolveCol(colPtDefault)
+               
+               pt <- x$res$prevTable
+
+               # Fail loudly on a changed prevTable layout: a missing column
+               # accessed via '$' is silently NULL, and plot(x, NULL) then
+               # reinterprets x as y and draws an empty panel.
+               ptCols <- c("est", "lci", "uci")
+               if (!all(ptCols %in% colnames(pt)))
+                 stop("prevTable lacks column(s): ",
+                      toString(setdiff(ptCols, colnames(pt))), call. = FALSE)
+
+               # right = FALSE: left-closed bins [a, b), matching the bin
+               # labels of the prevalence table printed by desc().
+               xCut <- cut(xOk,
+                           breaks = c(-Inf, x$res$breaks, Inf),
+                           right  = FALSE)
+               xPos <- as.numeric(tapply(xOk, xCut, median))
+
+               if (length(xPos) != nrow(pt))
+                 stop(sprintf("%d bins from 'breaks' but %d rows in prevTable",
+                              length(xPos), nrow(pt)), call. = FALSE)
+
+               est <- pt[, "est"]
+               lci <- pt[, "lci"]
+               uci <- pt[, "uci"]
+
+               prevTotal <- sum(yOk == lvls[2L]) / length(yOk)
+
+               # empty canvas first, so the grid ends up behind the data
+               plot(xPos, est,
+                    type = "n",
+                    ylim = c(0, 1),
+                    xlab = resolveXlab(5),
+                    ylab = resolveYlab(5),
+                    main = .main(.panelDefault("Prevalence by x-quantile")),
+                    frame.plot = FALSE,
+                    ...)
+
+               .drawGrid(.useTheme)
+
+               abline(h   = prevTotal,
+                      lty = 2,
+                      col = "gray50")
+
+               arrows(xPos, lci, xPos, uci,
+                      angle  = 90,
+                      code   = 3,
+                      length = 0.05,
+                      col    = colHere)
+
+               points(xPos, est,
+                      pch = 19,
+                      col = colHere)
+
+               text(x      = min(xPos),
+                    y      = prevTotal,
+                    labels = sprintf("overall: %s",
+                                     fm(prevTotal, fmt = "per.sty")),
+                    adj    = c(0, -0.5),
+                    col    = "gray50",
+                    cex    = 0.8)
+               
+               .drawBox(box)
+             },
+             
+             message(sprintf("which=%d not defined for Desc.qn", w))
+      )
+    }
+    
+  }, stamp = stamp)
+  
+  invisible(x)
+}
+
+

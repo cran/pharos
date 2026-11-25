@@ -1,0 +1,63 @@
+
+#' Find Position of First Occurrence Of a String 
+#' 
+#' Returns the numeric position of the first occurrence of a substring within a
+#' string. If the search string is not found, the result will be `NA`.
+#' 
+#' This is just a wrapper for the function [regexpr()]. 
+#' 
+#' @param x a character vector in which to search for the pattern, or an object
+#' which can be coerced by as.character to a character vector
+#' @param pattern character string (search string) containing the pattern to be
+#' matched in the given character vector. This can be a character string or a
+#' regular expression.
+#' @param pos integer, defining the start position for the search within x. The
+#' result will then be relative to the begin of the truncated string. Will be
+#' recycled. 
+#' 
+#' @return a vector of the first position of pattern in x 
+#' 
+#' @seealso [strChop()], [regexpr()] 
+#' 
+#' @examples
+#' 
+#' strPos(x=rownames(mtcars), pattern="y")
+#' 
+#' # first t, starting with position 4
+#' strPos(x=rownames(mtcars), pattern="t", pos=4)
+#' 
+#' 
+
+
+
+#' @seealso
+#' [string-overview] for an overview of all string utilities in pharos.
+#'
+#' @concept string-inspection
+#' @concept pattern-matching
+#'
+#'
+#' @export
+strPos <- function(x, pattern, pos = 1) {
+  
+  pos <- rep(pos, length.out = length(x))
+  x_sub <- stringi::stri_sub(x, from = pos)
+  
+  res <- stringi::stri_locate_first_regex(x_sub, pattern)[,1]
+  res[is.na(res)] <- NA
+  
+  return(res)
+}
+
+
+
+# strPos <- function(x, pattern, pos=1, ... ){
+#   
+#   pos <- rep(pos, length.out=length(x))
+#   x <- substr(x, start=pos, stop=nchar(x))
+#   
+#   i <- as.vector(regexpr(pattern = pattern, text = x, ...))
+#   i[i<0] <- NA
+#   return(i)
+# }
+

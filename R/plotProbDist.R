@@ -1,0 +1,176 @@
+
+#' Plot Probability Distribution
+#'
+#' Produces a plot of a probability distribution function with shaded areas.
+#' Useful for illustrating critical regions, p-values, or probability masses
+#' in statistics teaching materials.
+#'
+#' @param breaks numeric vector of break points defining the boundaries between
+#'   shaded areas. The first and last value define the plot range passed to
+#'   [shade()]; interior values are the actual boundaries.
+#' @param FUN the distribution density function to plot, typically of the form
+#'   `function(x) dnorm(x, mean=0, sd=1)`.
+#' @param main main title. `NULL` (default) draws none, unless the
+#'   theme sets `autoTitle = TRUE` (see [theme]); the title is then
+#'   derived from the expression passed as `FUN`. `""`, `NA` or `FALSE` always
+#'   suppress it and compact the top margin; any other string is used
+#'   as given.
+#' @param xlim numeric vector of length 2. x-axis limits passed to
+#'   [curve()].
+#' @param col color(s) for the shaded areas. Recycled if shorter than the
+#'   number of areas. Defaults to the "helsana" palette.
+#' @param density density of shading lines passed to [shade()].
+#'   Default is `7`.
+#' @param ylab label for the y-axis. Default is `"density"`.
+#' @param areaLabels controls labels placed in the centre of each shaded area.
+#'   `NULL` (default) suppresses labels. `TRUE` uses
+#'   `LETTERS` as default labels. A character vector sets explicit labels.
+#'   A named list overrides individual arguments passed to
+#'   [boxedText()] (e.g. `list(cex = 3)` or
+#'   `list(x = c(-2, 3), y = 0.1)` for manual positioning).
+#' @param breakLabels controls labels placed on the x-axis at interior break
+#'   points via [mtext()]. `NULL` (default) suppresses labels.
+#'   `TRUE` uses `LETTERS` as default labels. A character vector
+#'   sets explicit labels. A named list overrides individual arguments
+#'   (e.g. `list(cex = 1.8, font = 1)`).
+#' @param grid controls the background grid. `.useTheme` (default) follows
+#'   the active theme, `TRUE` draws it, `FALSE`, `NULL` or `NA` suppress it.
+#'   A named list overrides individual arguments passed to [grid()].
+#' @param box controls the plot box. `.useTheme` (default) uses the
+#'   current theme setting. `TRUE`/`FALSE` forces the box on or off.
+#'   A named list overrides individual arguments passed to
+#'   [box()].
+#' @param stamp controls the corner stamp. `.useTheme` (default)
+#'   resolves to `getTheme()$stamp`. `TRUE`/`FALSE`/
+#'   `NULL`, a string, or a named list for [stamp()].
+#' @param \dots further graphical parameters passed to [curve()]
+#'   and `.applyParFromDots()`, e.g. `las`, `col.axis`.
+#'
+#' @return `NULL`, invisibly.
+#'
+#' @examples
+#' # Normal distribution with two areas
+#' plotProbDist(breaks = c(-10, -1, 12),
+#'              FUN    = function(x) dnorm(x, mean = 2, sd = 2),
+#'              main   = "Normal-Distribution N(2,2)",
+#'              xlim   = c(-7, 10),
+#'              col    = c("deeppink4", "skyblue3"),
+#'              density = c(20, 7),
+#'              breakLabels = TRUE)
+#'
+#' # t-distribution with three areas
+#' plotProbDist(breaks = c(-6, -2.3, 1.5, 6),
+#'              FUN    = function(x) dt(x, df = 8),
+#'              main   = "t-Distribution (df=8)",
+#'              xlim   = c(-4, 4),
+#'              col    = c("deeppink4", "skyblue3", "darkorange2"),
+#'              density = c(20, 7),
+#'              areaLabels = FALSE,
+#'              breakLabels = list(text=c("A", "B")))
+#'
+#' # Chi-square distribution
+#' plotProbDist(breaks  = c(0, 15, 35),
+#'              FUN     = function(x) dchisq(x, df = 8),
+#'              main    = expression(chi^2~"-Distribution (df=8)"),
+#'              xlim    = c(0, 30),
+#'              col     = c("deeppink4", "skyblue3"),
+#'              density = c(0, 20),
+#'              breakLabels = list(text="B"))
+#'
+#'
+#' @seealso [curve()]
+#' 
+#' @family plot.distribution  
+#' @concept distribution-summary
+#'
+#'
+#' @export
+plotProbDist <- function(
+    # DATA
+    breaks,
+    FUN,
+
+    # LABELS
+    main = NULL,
+    ylab = "density",
+
+    # AXES
+    xlim = NULL,
+
+    # STYLE
+    col     = NULL,
+    density = 7,
+    grid    = .useTheme,
+    box     = .useTheme,
+
+    # FEATURES
+    areaLabels  = NULL,
+    breakLabels = NULL,
+
+    # FRAMEWORK
+    stamp = .useTheme,
+
+    ...
+) {
+  
+  # the default title is the density as the caller wrote it
+  mc   <- match.call()
+  main <- .resolveTitle(main, default = deparse1(mc$FUN))
+
+  .withGraphicsState({
+    
+    .applyParFromDots(...,
+                      defaults = list(
+                        mar = c(
+                          bottom = 5,
+                          top    = .marTop(main)
+                        )
+                      ))
+    
+    # curve() and shade() take the *name* FUN and look it up in this frame,
+    # where it is the function object; no string evaluation is needed
+    if (!is.function(FUN))
+      stop("'FUN' must be a function, e.g. function(x) dnorm(x)",
+           call. = FALSE)
+
+    if (is.null(col))
+      col <- pal("helsana")[1:length(breaks)]
+    
+    curve(FUN, xlim = xlim, main = main,
+          type = "n", las = 1, ylab = ylab, ...)
+    
+    shade(FUN, breaks = breaks, col = col, density = density)
+    
+    .drawGrid(grid)
+    .drawBox(box)
+    
+    # --- areaLabels ---
+    callIf(
+      boxedText,
+      areaLabels,
+      defaults = list(
+        labels = LETTERS[1:(length(breaks) - 1)],
+        x      = moveAvg(c(xlim[1], head(breaks, -1)[-1], xlim[2]), order = 2, align = "left"),
+        y      = abcCoords("left")$xy$y,
+        cex    = 2,
+        border = NA
+      )
+    )
+    
+    # --- breakLabels ---
+    callIf(
+      mtext,
+      breakLabels,
+      defaults = list(
+        text = LETTERS[1:length(head(breaks, -1)[-1])],
+        side = 1,
+        line = 2.5,
+        at   = head(breaks, -1)[-1],
+        font = 2,
+        cex  = 1.4
+      )
+    )
+    
+  }, stamp = stamp)
+}
+

@@ -1,0 +1,404 @@
+
+
+#' Arc Geometry
+#'
+#' Create one or more circular or elliptic arcs.
+#'
+#' @param x,y coordinates of the arc centre
+#' @param radiusX,radiusY horizontal and vertical radius
+#' @param startAngle,endAngle start and end angle in radians
+#' @param nPoints number of points used to approximate the arc
+#'
+#' @return
+#' An object inheriting from class `"arcGeometry"`.
+#'
+#' @examples
+#' canvas(xlim = c(-2, 2))
+#'
+#' # a quarter of a circle
+#' lines(arc(radiusX = 1.5, startAngle = 0, endAngle = pi/2), lwd = 2)
+#'
+#' # elliptic arcs, vectors of radii yield a collection of arcs
+#' a <- arc(radiusX = c(0.5, 1), radiusY = c(1, 1.8),
+#'          startAngle = pi, endAngle = 3*pi/2)
+#' lines(a, col = "red")
+#'
+#' @family geometry.structures
+#' @concept geometry
+#' @concept numerical-methods
+#'
+#' @export
+arc <- function(
+    x = 0,
+    y = 0,
+    radiusX = 1,
+    radiusY = radiusX,
+    startAngle = 0,
+    endAngle = 2*pi,
+    nPoints = 100
+) {
+  
+  args <- recycle(
+    x          = x,
+    y          = y,
+    radiusX    = radiusX,
+    radiusY    = radiusY,
+    startAngle = startAngle,
+    endAngle   = endAngle,
+    numPoints  = nPoints
+  )
+  
+  res <- vector("list", attr(args, "maxdim"))
+  
+  for(i in seq_along(res)) {
+    
+    dtheta <- args$endAngle[i] - args$startAngle[i]
+    
+    theta <- seq(
+      from = 0,
+      to = if(dtheta < 0) dtheta + 2*pi else dtheta,
+      length.out = args$numPoints[i]
+    ) + args$startAngle[i]
+    
+    res[[i]] <- .newGeometry(
+      x = cos(theta) * args$radiusX[i] + args$x[i],
+      y = sin(theta) * args$radiusY[i] + args$y[i],
+      class = c("arcGeometry", "lineGeometry")
+    )
+    
+  }
+  
+  if(length(res) == 1L)
+    return(res[[1L]])
+  
+  class(res) <- c("geometryCollection", "list")
+  
+  res
+}
+
+
+#' Circle Geometry
+#'
+#' Create a circular geometry.
+#'
+#' @param x,y centre coordinates.
+#' @param radius circle radius.
+#' @param nPoints number of points used to approximate the circle.
+#'
+#' @return
+#' An object inheriting from class `"circleGeometry"`.
+#'
+#' @examples
+#' canvas(xlim = c(-2, 2))
+#'
+#' polygonX(circle(radius = 1.5), col = "lightblue")
+#'
+#' # several circles at once
+#' polygonX(circle(x = c(-0.6, 0.6), y = 0, radius = 0.4),
+#'          col = c("tomato", "royalblue"))
+#'
+#' @family geometry.structures
+#' @concept geometry
+#' @concept numerical-methods
+#' 
+#' @export
+circle <- function(
+    x = 0,
+    y = 0,
+    radius = 1,
+    nPoints = 100
+) {
+  
+  res <- arc(
+    x = x,
+    y = y,
+    radiusX = radius,
+    radiusY = radius,
+    startAngle = 0,
+    endAngle = 2*pi,
+    nPoints = nPoints
+  )
+
+  res <- .setGeometryClass(
+    res,
+    c("circleGeometry", "polygonGeometry")
+  )
+  
+  res
+}
+
+
+
+#' Ellipse Geometry
+#'
+#' Create an elliptic geometry.
+#'
+#' Use [rotate()] to rotate the resulting geometry.
+#'
+#' @param x,y centre coordinates.
+#' @param radiusX,radiusY horizontal and vertical radius.
+#' @param nPoints number of points used to approximate the ellipse.
+#'
+#' @return
+#' An object inheriting from class `"ellipseGeometry"`.
+#'
+#' @examples
+#' canvas(xlim = c(-2, 2))
+#'
+#' e <- ellipse(radiusX = 1.8, radiusY = 0.8)
+#' polygonX(e, col = "lightblue")
+#'
+#' # the same ellipse, rotated by 45 degrees
+#' polygonX(rotate(e, theta = pi/4), border = "red")
+#'
+#' @family geometry.structures
+#' @concept geometry
+#' @concept numerical-methods
+#' 
+#' @export
+ellipse <- function(
+    x = 0,
+    y = 0,
+    radiusX = 1,
+    radiusY = radiusX,
+    nPoints = 100
+) {
+  
+  res <- arc(
+    x = x,
+    y = y,
+    radiusX = radiusX,
+    radiusY = radiusY,
+    startAngle = 0,
+    endAngle = 2*pi,
+    nPoints = nPoints
+  )
+  
+  res <- .setGeometryClass(
+    res,
+    c("ellipseGeometry", "polygonGeometry")
+  )
+  
+  res
+}
+
+
+#' Regular Polygon Geometry
+#'
+#' Create a regular polygon.
+#'
+#' @param x,y centre coordinates.
+#' @param radius circumradius.
+#' @param nVertices number of vertices.
+#' @param startAngle staring angle in radians.
+#'
+#' @return
+#' An object inheriting from class `"regPolygonGeometry"`.
+#'
+#' @examples
+#' canvas(xlim = c(-2, 2))
+#'
+#' # a hexagon is the default
+#' polygonX(regPolygon(radius = 1.8), col = "lightblue")
+#'
+#' # a square, once standing on a vertex and once on an edge
+#' polygonX(regPolygon(radius = 1.2, nVertices = 4), border = "red")
+#' polygonX(regPolygon(radius = 1.2, nVertices = 4, startAngle = pi/4))
+#'
+#' # a triangle pointing upwards
+#' polygonX(regPolygon(radius = 0.5, nVertices = 3, startAngle = pi/2),
+#'          col = "royalblue")
+#'
+#' @family geometry.structures
+#' @concept geometry
+#' @concept numerical-methods
+#' 
+#' @export
+regPolygon <- function(
+    x = 0,
+    y = 0,
+    radius = 1,
+    nVertices = 6,
+    startAngle = 0
+) {
+  
+  res <- arc(
+    x = x,
+    y = y,
+    radiusX = radius,
+    radiusY = radius,
+    startAngle = startAngle,
+    endAngle = startAngle + 2*pi,
+    nPoints = nVertices + 1L
+  )
+  
+  res$x <- res$x[-length(res$x)]
+  res$y <- res$y[-length(res$y)]
+  
+  res <- .setGeometryClass(
+    res,
+    c("regPolygonGeometry", "polygonGeometry")
+  )
+  
+  res
+}
+
+
+#' Ring Geometry
+#'
+#' Create one or more rings or ring segments.
+#'
+#' @param x,y centre coordinates.
+#' @param innerRadius radius of the inner boundary.
+#' @param outerRadius radius of the outer boundary.
+#' @param startAngle,endAngle start and end angle in radians.
+#' @param nPoints number of points used for each boundary.
+#'
+#' @return
+#' An object inheriting from class `"ringGeometry"` or a
+#' `"geometryCollection"`.
+#'
+#' @examples
+#' canvas(xlim = c(-2, 2))
+#'
+#' # a full ring
+#' polygonX(ring(innerRadius = 1.4, outerRadius = 1.8), col = "lightblue")
+#'
+#' # two ring segments at once
+#' r <- ring(innerRadius = c(0.3, 0.8), outerRadius = c(0.7, 1.2),
+#'           startAngle = c(0, pi), endAngle = c(pi/2, 3*pi/2))
+#' polygonX(r, col = c("tomato", "royalblue"))
+#'
+#' @family geometry.structures
+#' @concept geometry
+#' @concept numerical-methods
+#' 
+#' @export
+ring <- function(
+    x = 0,
+    y = 0,
+    innerRadius = 0.5,
+    outerRadius = 1,
+    startAngle = 0,
+    endAngle = 2*pi,
+    nPoints = 100
+) {
+  
+  args <- recycle(
+    x           = x,
+    y           = y,
+    innerRadius = innerRadius,
+    outerRadius = outerRadius,
+    startAngle  = startAngle,
+    endAngle    = endAngle,
+    numPoints   = nPoints
+  )
+  
+  if(any(args$innerRadius >= args$outerRadius))
+    stop("'innerRadius' must be smaller than 'outerRadius'")
+  
+  res <- vector("list", attr(args, "maxdim"))
+  
+  for(i in seq_along(res)) {
+    
+    dtheta <- (args$endAngle[i] - args$startAngle[i]) %% (2*pi)
+    
+    isFullRing <- isTRUE(all.equal(dtheta, 0))
+    
+    if(isFullRing) {
+      
+      outer <- circle(
+        x = args$x[i],
+        y = args$y[i],
+        radius = args$outerRadius[i],
+        nPoints = args$numPoints[i]
+      )
+      
+      inner <- circle(
+        x = args$x[i],
+        y = args$y[i],
+        radius = args$innerRadius[i],
+        nPoints = args$numPoints[i]
+      )
+      
+      res[[i]] <- .newGeometry(
+        x = c(outer$x, NA, rev(inner$x)),
+        y = c(outer$y, NA, rev(inner$y)),
+        class = c("ringGeometry", "polygonGeometry")
+      )
+      
+    } else {
+      
+      outer <- arc(
+        x = args$x[i],
+        y = args$y[i],
+        radiusX = args$outerRadius[i],
+        radiusY = args$outerRadius[i],
+        startAngle = args$startAngle[i],
+        endAngle = args$endAngle[i],
+        nPoints = args$numPoints[i]
+      )
+      
+      inner <- arc(
+        x = args$x[i],
+        y = args$y[i],
+        radiusX = args$innerRadius[i],
+        radiusY = args$innerRadius[i],
+        startAngle = args$startAngle[i],
+        endAngle = args$endAngle[i],
+        nPoints = args$numPoints[i]
+      )
+      
+      res[[i]] <- .newGeometry(
+        x = c(outer$x, rev(inner$x)),
+        y = c(outer$y, rev(inner$y)),
+        class = c("ringGeometry", "polygonGeometry")
+      )
+      
+    }
+    
+  }
+  
+  if(length(res) == 1L)
+    return(res[[1L]])
+  
+  class(res) <- c("geometryCollection", "list")
+  
+  res
+  
+}
+
+
+
+# == internal helper functions ==============================================
+
+.newGeometry <- function(x, y, class) {
+  
+  res <- xy.coords(x = x, y = y)
+  
+  class(res) <- c(class, "geometry")
+  
+  res
+  
+}
+
+
+.setGeometryClass <- function(x, class) {
+  
+  stopifnot(is.character(class))
+  
+  if(inherits(x, "geometryCollection")) {
+    
+    for(i in seq_along(x))
+      class(x[[i]]) <- c(class, "geometry")
+    
+    return(x)
+    
+  }
+  
+  class(x) <- c(class, "geometry")
+  
+  x
+  
+}
+

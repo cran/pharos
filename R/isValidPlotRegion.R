@@ -1,0 +1,77 @@
+
+#' Check Whether the Current Plot Region Is Large Enough
+#'
+#' Tests whether the plot region of the active graphics device meets a
+#' minimal size requirement. This is useful before drawing into small
+#' devices or heavily subdivided layouts (`mfrow`, `layout()`,
+#' Shiny render panes), where an undersized region would otherwise fail
+#' with the rather cryptic error `"figure margins too large"`.
+#'
+#' @param minPin numeric vector of length 2, giving the minimal required
+#'   width and height of the plot region in inches. Defaults to the option
+#'   `DescToolsX.plot.minPin` and falls back to `c(0.5, 0.5)`
+#'   if the option is not set.
+#'
+#' @details
+#' The plot region is the area inside the figure margins, as reported by
+#' `par("pin")`. Its size results from the device dimensions minus
+#' the current margins (`mar`, `oma`), so both a small device
+#' and oversized margins can render it degenerate.
+#'
+#' If no graphics device is open (`dev.cur() == 1`), the function
+#' returns `TRUE`, since the next high-level plot call will open a
+#' fresh device with default dimensions. Note that querying `par()`
+#' in this state would itself open a device as a side effect, which this
+#' function deliberately avoids.
+#'
+#' The function has no side effects and never throws; it is meant as a
+#' guard for conditional plotting, e.g.
+#' `if (isValidPlotRegion()) plot(x) else message("device too small")`.
+#'
+#' @return a single logical: `TRUE` if the plot region is at least
+#'   `minPin` inches in both dimensions (or if no device is open),
+#'   `FALSE` otherwise.
+#'
+#' @seealso [par()] (entries `pin`, `fin`, `mar`),
+#'   [dev.cur()]
+#'
+#' @examples
+#' # guard a plot against a degenerate region
+#' if (isValidPlotRegion()) {
+#'   plot(rnorm(20))
+#' } else {
+#'   message("plot region too small")
+#' }
+#'
+#' # require a larger region, e.g. for a wide correlation plot
+#' isValidPlotRegion(minPin = c(4, 3))
+#'
+#'
+#' @family graphics.layout 
+#' @concept geometry
+#'
+#' @export
+isValidPlotRegion <- function(
+    minPin = .getOption("plot.minPin", c(0.5, 0.5)) ) {
+  
+  minPin <- rep_len(minPin, 2L)
+  
+  if (length(minPin) != 2L ||
+      anyNA(minPin) ||
+      any(!is.finite(minPin)) ||
+      any(minPin < 0)) {
+    stop("'minPin' must contain one or two finite, non-negative values")
+  }
+  
+  fin <- par("fin")
+  mai <- par("mai")
+  
+  pin <- fin - c(
+    mai[2] + mai[4],
+    mai[1] + mai[3]
+  )
+  
+  isTRUE(all(is.finite(pin)) && all(pin >= minPin))
+}
+
+

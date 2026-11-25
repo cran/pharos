@@ -1,0 +1,95 @@
+#' Get or Set Unit Attribute
+#'
+#' Retrieves or assigns a unit attribute to an R object.
+#'
+#' The unit is stored as a simple character string in the `"unit"` attribute.
+#' This provides a lightweight mechanism for attaching unit metadata to objects,
+#' without enforcing any automatic conversion or validation.
+#'
+#' @param x an R object.
+#' @param value A single character string specifying the unit, or `NULL`
+#'   to remove the unit attribute.
+#'
+#' @details
+#' The setter does not validate whether the unit is physically meaningful.
+#' Validation and conversion should be handled externally (e.g., via
+#' a unit conversion engine such as `ConvUnit7`).
+#'
+#' Assigning `NULL` removes the unit attribute.
+#'
+#' @return
+#' \itemize{
+#'   \item `unit(x)` returns the unit as a character string or `NULL`.
+#'   \item `unit(x) <- value` returns `x` with updated unit attribute.
+#' }
+#'
+#' @examples
+#' x <- 10
+#' unit(x) <- "m"
+#' unit(x)
+#'
+#' y <- 5
+#' unit(y) <- "kg"
+#'
+#' # remove unit
+#' unit(y) <- NULL
+#'
+#' @name unit
+
+#' @family format
+#' @concept attribute
+#' @concept formatting
+#'
+#'
+#' @export
+unit <- function(x) {
+  attr(x, "unit", exact = TRUE)
+}
+
+
+#' @rdname unit
+#' @export
+`unit<-` <- function(x, value) {
+  
+  if (!is.null(value) && (!is.character(value) || length(value) != 1L)) {
+    stop("value must be a single character string or NULL")
+  }
+  
+  attr(x, "unit") <- value
+  
+  if (!is.null(value))
+    class(x) <- unique(c("Unit", class(x)))
+  
+  x
+}
+
+
+#' Print Object with Unit
+#'
+#' S3 method for printing objects with a `"Unit"` class.
+#' Displays the value along with its associated unit.
+#'
+#' @param x an object with class `"Unit"`.
+#' @param ... additional arguments passed to `print()`.
+#'
+#' @return Invisibly returns `x`.
+#'
+#' @examples
+#' x <- 10
+#' unit(x) <- "m"
+#' class(x) <- "Unit"
+#' print(x)
+#'
+
+#' @seealso [base::attr], [bedrock::label]
+#'
+#' @family format
+#' @concept attribute
+#' @concept formatting
+#' 
+#' @export
+print.Unit <- function(x, ...) {
+  cat(x, "[", unit(x), "]\n")
+  invisible(x)
+}
+

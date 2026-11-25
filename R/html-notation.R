@@ -1,0 +1,55 @@
+
+#' HTML notation for hat and bar diacritics
+#'
+#' Append the HTML entity for a circumflex (\dQuote{hat}, as in an
+#' estimator \eqn{\hat{x}}) or macron (\dQuote{bar}, as in a sample mean
+#' \eqn{\bar{x}}) to a label.
+#'
+#' @param x a character vector, typically a variable name or symbol
+#'
+#' @return a character vector with the diacritic's HTML entity appended
+#'
+#' @examples
+#' htmlHat("p")  # -> "p&#770;"   (renders as p with a circumflex)
+#' htmlBar("x")  # -> "x&#772;"   (renders as x with a macron)
+#'
+#' @name htmlNotation
+#' @family html
+NULL
+
+#' @rdname htmlNotation
+#' @concept html
+#' @concept formatting
+#'
+#' @export
+htmlHat <- function(x) {
+  gettextf("%s&#770;", x)
+}
+
+#' @rdname htmlNotation
+#' @export
+htmlBar <- function(x) {
+  gettextf("%s&#772;", x)
+}
+
+
+#' Subscript notation
+#'
+#' Infix operator producing an HTML subscript, e.g. for indexed symbols
+#' such as \eqn{x_i}.
+#' 
+#' @name htmlSubscript
+#'
+#' @param x a character vector (the base symbol)
+#' @param i a character vector (the subscript), recycled against `x`
+#'
+#' @return a character vector: `x` followed by \verb{<sub>i</sub>}
+#'
+#' @examples
+#' "x" %_% "i"  # -> "x<sub>i</sub>"
+#'
+#' @family html
+#' @export
+`%_%` <- function(x, i) {
+  gettextf("%s<sub>%s</sub>", x, i)
+}

@@ -1,0 +1,599 @@
+
+#' Frequency Distribution Plot 
+#' 
+#' Creates a univariate graphical summary combining a histogram (or probability
+#' mass plot for discrete data), a kernel density curve, a boxplot, and an
+#' empirical cumulative distribution function in a single multi-panel figure.
+#' Optional components include a rug, and fitted theoretical distribution
+#' curves for both the histogram and the ECDF panel.
+#'
+#' Each plot component is controlled via a single argument accepting
+#' [bedrock::callIf()] semantics:
+#' \itemize{
+#'   \item `TRUE`: draw with package defaults
+#'   \item `FALSE`, `NULL`, or `NA`: suppress entirely
+#'   \item a named list: draw with the given overrides merged into the defaults
+#' }
+#' 
+#' Performance: for very large vectors (n > 1e7) the density curve, ECDF,
+#' and semi-transparent boxplot outliers will still take noticeable time.
+#' For exploratory work on very large data, consider sampling first:
+#' `plotFreqDist(x[sample(length(x), 5000)])`.
+#'
+#' @param x numeric vector whose distribution is to be plotted.
+#'
+#' @param main main title. `NULL` (default) draws none, unless the
+#'   theme sets `autoTitle = TRUE` (see [theme]); the title is then
+#'   derived from the expression passed as `x`. `""`, `NA` or `FALSE` always
+#'   suppress it and compact the top margin; any other string is used
+#'   as given.
+#' @param xlab label for the x-axis. The variable name is typically placed
+#'   in `main`, so this defaults to `""`.
+#' @param xlim range of the x-axis. `NULL` (default) uses a pretty
+#'   range of the non-missing values in `x`.
+#'
+#' @param heights numeric vector of relative panel heights for
+#'   [layout()]: three values for histogram/boxplot/ecdf, two
+#'   for histogram/boxplot or histogram/ecdf only. `NULL` (default)
+#'   chooses automatically.
+#'
+#' @param hist controls the histogram panel. `TRUE` (default) uses
+#'   package defaults; `FALSE`/`NA` suppresses the panel
+#'   (`xlim` then falls back to the pretty range of the data);
+#'   a list overrides specific arguments forwarded to
+#'   [graphics::hist()]. The element `type` selects the
+#'   plot style: `"hist"` (standard histogram, chosen automatically
+#'   for continuous or high-cardinality data) or `"mass"` (vertical
+#'   bars per unique value, for discrete/low-cardinality data).
+#'   The element `panel.last` adds to the histogram after it is drawn:
+#'   a function without arguments or a quoted call, e.g.
+#'   `list(panel.last = quote(abline(v = 0, lty = 2)))`.
+#' @param dens controls the kernel density curve. `TRUE` (default)
+#'   draws a curve via [stats::density()]; a list overrides
+#'   specific arguments (e.g. `list(bw = 0.1, col = "red")`).
+#' @param rug controls a rug plot. `FALSE` (default) suppresses it;
+#'   `TRUE` or a list draw a rug via [graphics::rug()].
+#' @param curve controls a fitted theoretical distribution curve on the
+#'   histogram. `FALSE` (default), `NULL`, or `NA`
+#'   suppress it; `TRUE` draws a normal curve with
+#'   `mean(x)`/`sd(x)`; a list may include `expr` as a function of `x`
+#'   or a one-sided formula in `x` for any distribution (e.g.
+#'   `list(expr = ~ dt(x, df = 2), col = "darkgreen")`). The formula is
+#'   evaluated in the environment it was written in, so local variables
+#'   may be referenced (see the gamma example below).
+#' @param boxplot controls the boxplot panel. `TRUE` (default) draws
+#'   a horizontal boxplot with a mean marker and CI band; `FALSE`/
+#'   `NA` suppresses the panel. A list overrides arguments forwarded
+#'   to [graphics::boxplot()]; two extra elements control the
+#'   mean display: `pch.mean` (default `3`) and `col.meanci`
+#'   (default `getTheme()$grid$col`). Set either to `NA` to
+#'   suppress that element.
+#' @param ecdf controls the ECDF panel. `TRUE` (default) calls
+#'   [plotECDF()]; a list overrides specific arguments.
+#' @param curveEcdf controls a fitted theoretical CDF curve on the ECDF
+#'   panel, analogous to `curve`. `FALSE` (default) suppresses
+#'   it.
+#'
+#' @param stamp controls the corner stamp. `.useTheme` (default)
+#'   resolves to `getTheme()$stamp`. `TRUE`/`FALSE`/
+#'   `NULL`, a string, or a named list for [stamp()].
+#' @param \dots further graphical parameters passed to [par()]
+#'   via the internal framework. Note that `mar` given here sets the
+#'   *outer* margins (`oma`) of the multi-panel figure; the
+#'   inner panel margins are managed internally and cannot be overridden.
+#'
+#' @return No return value (invisible `NULL`), called for its side effect of
+#' drawing the plot.
+#'
+#' @seealso [hist()], [boxplot()], [plotECDF()],
+#'   [density()], [rug()], [layout()],
+#'   [theme]
+#'
+#' @examples
+#' plotFreqDist(faithful$eruptions)
+#'
+#' # custom histogram breaks, density color, boxplot styling
+#' plotFreqDist(faithful$eruptions,
+#'   hist    = list(breaks = 50),
+#'   dens    = list(col = "olivedrab4"),
+#'   boxplot = list(col = "olivedrab2", pch.mean = NA, col.meanci = NA))
+#'
+#' # no density, no ecdf, add rug instead
+#' plotFreqDist(faithful$eruptions,
+#'   dens = FALSE, ecdf = FALSE,
+#'   hist = list(xaxt = "s"),
+#'   rug  = TRUE,
+#'   heights = c(3, 2.5), 
+#'   main = "Eruption time")
+#'
+#' # overlay a normal density curve
+#' x <- rnorm(1000)
+#' plotFreqDist(x, curve = TRUE, boxplot = FALSE, ecdf = FALSE)
+#'
+#' # compare with a t-distribution curve
+#' plotFreqDist(x,
+#'   curve   = list(expr = ~ dt(x, df = 2), col = "darkgreen"),
+#'   boxplot = FALSE, ecdf = FALSE)
+#'
+#' # overlay gamma distribution on both histogram and ECDF
+#' ozone <- airquality$Ozone
+#' m <- mean(ozone, na.rm = TRUE)
+#' v <- var(ozone, na.rm = TRUE)
+#' plotFreqDist(ozone,
+#'   hist       = list(breaks = 15),
+#'   curve      = list(expr = ~ dgamma(x, shape = m^2/v, scale = v/m),
+#'                     col = "navajowhite3"),
+#'   curveEcdf  = list(expr = ~ pgamma(x, shape = m^2/v, scale = v/m),
+#'                     col = "navajowhite3"),
+#'   main = "Airquality - Ozone")
+#'
+#' @family plot.univariate  
+#' @concept frequency-table
+#'
+#'
+#' @export
+plotFreqDist <- function(x,
+                      
+                      # LABELS
+                      main  = NULL,
+                      xlab  = "",
+                      
+                      # AXES
+                      xlim  = NULL,
+                      
+                      # STRUCTURE
+                      heights = NULL,
+
+                      # STYLE (callIf semantics)
+                      hist      = TRUE,
+                      dens      = TRUE,
+                      rug       = FALSE,
+                      curve     = FALSE,
+                      boxplot   = TRUE,
+                      ecdf      = TRUE,
+                      curveEcdf = FALSE,
+                      
+                      # FRAMEWORK
+                      stamp = .useTheme,
+                      
+                      ...) {
+  
+  # NOTE: the arguments 'hist', 'boxplot', 'curve', 'rug', 'ecdf' shadow
+  # the eponymous graphics functions. This is safe only because every
+  # call goes through do.call("<name>", ...), which looks the name up
+  # with mode = "function". Never call these functions directly by name
+  # inside this body.
+  
+  
+  # --- Internal helper: probability mass plot ------------------------------
+  .plotMass <- function(x, xaxt,
+                        xlim = NULL,
+                        ylim = NULL,
+                        las  = 1,
+                        col  = 1,
+                        lwd  = 3,
+                        pch  = NA,
+                        col.pch  = 1,
+                        cex.pch  = 1,
+                        bg.pch   = 0,
+                        cex.axis = NULL,
+                        gridPars = list(col = "grey", lty = "dotted", lwd = 1),
+                        ...) {
+    
+    pp <- prop.table(table(x))
+    if (is.null(ylim)) ylim <- c(0, max(pretty(pp)))
+    
+    plot(pp, type = "h", lwd = lwd, col = col,
+         xlab = "", ylab = "", cex.axis = cex.axis,
+         xlim = xlim, ylim = ylim,
+         xaxt = xaxt, main = NA, frame.plot = FALSE, las = las,
+         panel.first = {
+           abline(h = axTicks(2),
+                  col = gridPars$col, lty = gridPars$lty, lwd = gridPars$lwd)
+           abline(h = 0, col = "black")
+         })
+    
+    if (!identical(pch, NA))
+      points(pp, type = "p", pch = pch, col = col.pch, bg = bg.pch, cex = cex.pch)
+  }
+  
+  
+  # --- Internal helper: fitted distribution curve --------------------------
+  # Draws the curve by direct evaluation on an x-grid plus lines() instead
+  # of calling curve(): curve()'s NSE only accepts function *names*, not
+  # function objects passed through do.call(). 'expr' is a function of x
+  # or a one-sided formula in x; the formula is evaluated in its own
+  # environment, so local variables of the calling function resolve
+  # without any string evaluation (design rules §2.3).
+  .drawCurve <- function(args) {
+    f <- .curveFun(args$expr)
+    xx <- seq.int(args$from %||% par("usr")[1],
+                  args$to   %||% par("usr")[2],
+                  length.out = args$n %||% 101)
+    args[c("expr", "n", "add", "from", "to")] <- NULL
+    do.call("lines", c(list(x = xx, y = f(xx)), args))
+  }
+  
+  
+  mc           <- match.call()
+  penv         <- parent.frame()
+  defaultTitle <- deparse1(mc$x)
+  
+  .withGraphicsState({
+    
+    .applyParFromDots(...)
+    
+    # Read back effective par state - reflects theme defaults, function
+    # defaults, AND any user override from ..., all already merged by
+    # .applyParFromDots() above.
+    las      <- par("las")
+    cex.axis <- par("cex.axis")
+    
+    # a user-supplied 'mar' controls the OUTER margins (oma) of the
+    # multi-panel figure; the inner panel margins are managed below
+    oma_user <- if ("mar" %in% ...names()) par("mar") else NULL
+    
+    th     <- getTheme()
+    twin   <- th$twin
+    thGrid <- th$grid
+    
+    main     <- .resolveTitle(main, default = defaultTitle)
+    has_xlab <- !is.null(xlab) && nzchar(xlab)
+    
+    # Remove missing values before resolving component specifications.
+    x <- x[!is.na(x)]
+
+    if (!length(x))
+      stop("'x' contains no non-missing values", call. = FALSE)
+
+    if (any(!is.finite(x)))
+      stop("'x' must contain only finite values", call. = FALSE)
+    
+    # Resolve component specs
+    hist_args <- .resolveSpec(hist, list(
+      x    = x, xlab = "", ylab = "", freq = FALSE,
+      xlim = xlim, ylim = NULL, main = NA, las = 1,
+      col  = "white", border = "grey70", yaxt = "n",
+      xaxt = NULL
+    ))
+    
+    dens_args <- .resolveSpec(dens, list(
+      x   = x,
+      bw  = if (length(x) > 1000) "nrd0" else "SJ",
+      col = twin[1], lwd = 2, lty = "solid"
+    ))
+    
+    rug_args <- .resolveSpec(rug, list(x = x, col = "grey"))
+    
+    xMean <- mean(x)
+    xSd   <- sd(x)
+
+    curve_args <- .resolveSpec(curve, list(
+      expr = function(x) dnorm(x, xMean, xSd),
+      add  = TRUE, n = 500,
+      col  = twin[2], lwd = 2, lty = "solid"
+    ))
+    
+    boxplot_args <- .resolveSpec(boxplot, list(
+      x          = x,
+      frame.plot = FALSE, main = NA, boxwex = 1,
+      horizontal = TRUE, col = "grey95", at = 1,
+      outcex     = 1.3, outcol = rgb(0, 0, 0, 0.5),
+      cex.axis   = cex.axis,
+      pch.mean   = 3,
+      col.meanci = thGrid$col
+    ))
+    
+    ecdf_args <- .resolveSpec(ecdf, list(
+      x        = x, main = NA, ylim = c(0, 1),
+      col      = twin[2], lwd = 2,
+      xlab     = "", ylab = "",
+      cex.axis = cex.axis, las = las,
+      stamp    = FALSE
+    ))
+    
+    curveEcdf_args <- .resolveSpec(curveEcdf, list(
+      expr = function(x) pnorm(x, xMean, xSd),
+      add  = TRUE, n = 500,
+      col  = twin[2], lwd = 2, lty = "solid"
+    ))
+    
+    add.hist    <- !is.null(hist_args)
+    add.dens    <- !is.null(dens_args)
+    add.rug     <- !is.null(rug_args)
+    add.dcurve  <- !is.null(curve_args)
+    add.boxplot <- !is.null(boxplot_args)
+    add.ecdf    <- !is.null(ecdf_args)
+    add.pcurve  <- !is.null(curveEcdf_args)
+    
+    # suppress the x-axis on upper panels, but never clobber an explicit
+    # user override (the spec default is NULL)
+    if (add.hist)
+      hist_args$xaxt <- hist_args$xaxt %||%
+        (if (add.boxplot || add.ecdf) "n" else "s")
+    
+    if (is.null(heights)) {
+      if (add.boxplot) {
+        heights <- if (add.ecdf) c(1.8, 0.6, 1.4) else c(2, 1.4)
+      } else if (add.ecdf) {
+        heights <- c(2, 1.4)
+      }
+    }
+
+    # layout() rescales cex the same way mfrow does; snapshot all cex
+    # settings here and restore them right after
+    ppp <- par()[grep("cex", names(par()))]
+    if (add.ecdf && add.boxplot) {
+      layout(matrix(1:3, nrow = 3), heights = heights)
+    } else if (add.ecdf || add.boxplot) {
+      layout(matrix(1:2, nrow = 2), heights = heights[1:2])
+    }
+    par(ppp)
+
+    if (add.boxplot) {
+      par(mar = c(0, 4.1, 2.1, 2.1))
+    } else if (add.ecdf) {
+      par(mar = c(1.1, 4.1, 2.1, 2.1))
+    } else {
+      par(mar = c(if (has_xlab) 5.1 else 3.1, 4.1, 2.1, 2.1))
+    }
+
+    if (!is.null(oma_user)) {
+      par(oma = oma_user)
+    } else if (nzchar(main)) {
+      par(oma = c(0, 0, 2, 0))
+    } else {
+      par(oma = c(0, 0, 0, 0))
+    }
+    
+    
+    # check that the effective plot region is large enough
+    if (!isValidPlotRegion()) {
+      
+      warning(
+        "plot region too small; enlarge the plotting pane or reduce the margins",
+        call. = FALSE
+      )
+      
+    } else {
+      
+      # =======================================================================
+      # Panel 1: histogram or mass plot
+      # =======================================================================
+      
+      if (add.hist) {
+        
+        panel.last    <- hist_args[["panel.last"]]
+        hist_args[["panel.last"]] <- NULL
+        
+        type_override <- hist_args[["type"]]
+        hist_args[["type"]] <- NULL
+        do.hist <- if (is.null(type_override)) {
+          !(isTRUE(all.equal(x, round(x), tol = sqrt(.Machine$double.eps))) &&
+              isLowCardinality(x, maxUnique = 12))
+        } else {
+          type_override == "hist"
+        }
+        
+        comp_keys <- c("x", "breaks", "include.lowest", "right", "nclass")
+        x.hist    <- do.call("hist",
+                             c(hist_args[names(hist_args) %in% comp_keys],
+                               plot = FALSE))
+        x.hist$xname <- defaultTitle
+        
+        # xlim: add 5% padding so outermost bars/lines don't sit flush
+        # against the axis edge
+        if (is.null(hist_args$xlim)) {
+          raw <- range(pretty(x.hist$breaks))
+          pad <- diff(raw) * 0.05
+          hist_args$xlim <- c(raw[1] - pad, raw[2] + pad)
+        }
+        
+        xlim_plot <- hist_args$xlim
+        
+        if (do.hist) {
+          
+          if (add.dens) {
+            x.dens <- tryCatch(
+              do.call("density",
+                      dens_args[!names(dens_args) %in% c("col", "lwd", "lty")]),
+              error = function(e) {
+                warning(gettextf("density curve could not be added\n%s",
+                                 conditionMessage(e)))
+                NULL
+              }
+            )
+            if (is.null(x.dens)) {
+              add.dens <- FALSE
+            } else if (is.null(hist_args[["ylim"]])) {
+              hist_args[["ylim"]] <-
+                range(pretty(c(0, max(c(x.dens$y, x.hist$density)))))
+            }
+          }
+          
+          plot_args <- hist_args[!names(hist_args) %in% comp_keys]
+          do.call("plot", append(list(x.hist), plot_args))
+          
+          ticks     <- axTicks(2)
+          pos_ticks <- ticks[ticks > 0]
+          n         <- if (length(pos_ticks)) max(floor(log10(pos_ticks))) else 0
+          if (abs(n) > 2) {
+            lab <- fm(ticks * 10^(-n),
+                      digits = max(nDec(as.character(zapsmall(ticks * 10^(-n))))))
+            axis(2, at = ticks, labels = lab, las = las,
+                 cex.axis = par("cex.axis"))
+            text(par("usr")[1], par("usr")[4], bquote(~~~x~10^.(n)),
+                 xpd = NA, pos = 3, cex = par("cex.axis") * 0.8)
+          } else {
+            axis(2, cex.axis = par("cex.axis"), las = las)
+          }
+          
+          if (!is.null(panel.last))
+            .runPanelLast(panel.last, penv)
+          
+          if (add.dens)
+            lines(x.dens, col = dens_args$col, lwd = dens_args$lwd,
+                  lty = dens_args$lty)
+          
+          if (add.dcurve)
+            .drawCurve(curve_args)
+          
+          if (add.rug)
+            do.call("rug", rug_args)
+          
+        } else {
+          
+          # --- mass plot: own defaults, not from hist_args ---
+          # hist_args has col="white" (for histogram bars) which would make
+          # the mass lines invisible. Build a clean arg list for .plotMass().
+          mass_args <- list(
+            x        = x,
+            xlim     = xlim_plot,
+            xaxt     = hist_args$xaxt,   # already resolved incl. user override
+            las      = las,
+            cex.axis = cex.axis,
+            gridPars = thGrid
+          )
+          
+          # forward any user overrides from the 'hist' spec (type already
+          # stripped); histogram-specific defaults (col, border, ...) stay out
+          protected <- c("x", "xlim", "xaxt", "las", "cex.axis",
+                         "type", "freq", "col", "border", "yaxt")
+          if (is.list(hist) && length(hist) > 0)
+            mass_args[setdiff(names(hist), protected)] <-
+              hist[setdiff(names(hist), protected)]
+          
+          do.call(.plotMass, mass_args)
+          
+          if (add.rug)
+            do.call("rug", rug_args)
+        }
+        
+      } else {
+        # fallback range when the histogram panel is suppressed
+        xlim_plot <- xlim %||% range(pretty(x))
+      }
+      
+      
+      # =======================================================================
+      # Panel 2: boxplot
+      # =======================================================================
+      
+      if (add.boxplot) {
+        par(mar = c(if (add.ecdf) 0 else 5.1, 4.1, 0, 2.1))
+        
+        boxplot_args$xaxt <- boxplot_args$xaxt %||%
+          (if (add.ecdf) "n" else "s")
+        
+        at  <- boxplot_args$at
+        bwx <- boxplot_args$boxwex
+        
+        # boxplot() is called with add = TRUE below, so this empty plot
+        # establishes the coordinate system for the panel; for a
+        # horizontal boxplot, 'ylim' in the spec is the value axis
+        plot(1, type = "n",
+             xlim = boxplot_args$ylim %||% xlim_plot,
+             ylim = at + c(-0.5, 0.5),
+             xlab = "", ylab = "", axes = FALSE)
+        
+        grid(ny = NA, col = thGrid$col, lty = thGrid$lty, lwd = thGrid$lwd)
+        
+        if (length(x) > 1) {
+          ci <- .meanCI_raw(x)
+          if (!is.na(boxplot_args$col.meanci))
+            rect(xleft = ci[2], ybottom = at - 0.38 * bwx,
+                 xright = ci[3], ytop = at + 0.35 * bwx,
+                 col = boxplot_args$col.meanci, border = NA)
+        } else {
+          ci <- mean(x)
+        }
+        
+        bp_extra   <- c("pch.mean", "col.meanci")
+        pch.mean   <- boxplot_args$pch.mean
+        boxplot_args$add <- TRUE
+        do.call("boxplot", boxplot_args[!names(boxplot_args) %in% bp_extra])
+        
+        if (!is.na(pch.mean))
+          points(ci[1], at, cex = 1.5, col = "grey65", pch = pch.mean,
+                 bg = "white")
+      }
+      
+      
+      # =======================================================================
+      # Panel 3: ECDF
+      # =======================================================================
+      
+      if (add.ecdf) {
+        
+        ecdf_args$xlim   <- ecdf_args$xlim   %||% xlim_plot
+        ecdf_args$breaks <- ecdf_args$breaks %||%
+          if (add.hist && length(x) > 1000 && length(x.hist$mids) > 10) 1000 else NULL
+        
+        # mar passed explicitly to plotECDF() - it has its own
+        # .applyParFromDots() call that would otherwise apply its own
+        # left=5 default, misaligning the y-axis with the panels above
+        ecdf_args$mar <- c(3.1 + (if (has_xlab) 2 else 0), 4.1, 0, 2.1)
+        ecdf_args$box <- FALSE
+        
+        ecdf_args$xlab <- xlab   # set directly - plotECDF() restores its own
+        # par() on exit, so title() called from here
+        # afterwards would write into the wrong state
+        
+        do.call("plotECDF", ecdf_args)
+        
+        if (add.pcurve)
+          .drawCurve(curveEcdf_args)
+      }
+      
+      if (nzchar(main))              title(main = main, outer = TRUE)
+      if (!add.ecdf && has_xlab)     title(xlab = xlab)
+    }
+    
+  }, stamp = stamp, resetLayout = TRUE)
+  
+}
+
+
+# == internal helper functions ==============================================
+
+# Turns the 'expr' of a 'curve'/'curveEcdf' specification into a function
+# of x. A one-sided formula (~ dt(x, df = 2)) is evaluated in the
+# environment it was written in, so local variables of the caller resolve.
+# Character strings are rejected: they would need eval(parse()), which the
+# design rules exclude (§2.3).
+.curveFun <- function(expr) {
+  
+  if (is.function(expr))
+    return(expr)
+  
+  if (inherits(expr, "formula") && length(expr) == 2L) {
+    rhs <- expr[[2L]]
+    env <- environment(expr)
+    return(function(x) eval(rhs, list(x = x), env))
+  }
+  
+  if (is.character(expr))
+    stop("'expr' must be a function or a one-sided formula, not a ",
+         "character string: use expr = ~ dt(x, df = 2) or ",
+         "expr = function(x) dt(x, df = 2)", call. = FALSE)
+  
+  stop("'expr' must be a function of x or a one-sided formula in x",
+       call. = FALSE)
+}
+
+
+# Runs the 'panel.last' element of the 'hist' specification after the
+# histogram panel is drawn: a function without arguments, or a quoted call
+# (quote(abline(v = 0))) evaluated in the caller's environment.
+.runPanelLast <- function(panel.last, env) {
+  
+  if (is.function(panel.last))
+    return(invisible(panel.last()))
+  
+  if (is.call(panel.last) || is.expression(panel.last) || is.name(panel.last))
+    return(invisible(eval(panel.last, env)))
+  
+  stop("'panel.last' must be a function or a quoted call, ",
+       "e.g. quote(abline(v = 0)); character strings are not accepted",
+       call. = FALSE)
+}

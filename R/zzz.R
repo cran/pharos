@@ -1,0 +1,56 @@
+
+
+
+# Default styles that the plots of this package (plotBox(), plotHeatmap(),
+# plot.Desc.qn()) and the report functions of the suite refer to by name.
+# They are plain options, so that a user can redefine them; only those not
+# yet defined are set, which also leaves the definitions of another package
+# of the suite alone, should that one have been loaded first.
+#' @noRd
+.styleDefaults <- function() {
+  list(
+    abs.sty  = style(digits = 0, bigMark = "",
+                     label = "Number format for counts"),
+    per.sty  = style(digits = 1, fmt = "%",
+                     label = "Percentage number format"),
+    num.sty  = style(digits = 3, bigMark = "",
+                     label = "Number format for numeric values"),
+    pval.sty = style(fmt = "p", pThreshold = 1e-3,
+                     label = "Number format for p-values")
+  )
+}
+
+
+.onLoad <- function(libname, pkgname) {
+  
+  current <- getOption("pharos.theme", list())
+  options(pharos.theme = utils::modifyList(.themeDefaults, current))
+  
+  sty <- .styleDefaults()
+  toSet <- !names(sty) %in% names(options())
+  if (any(toSet)) options(sty[toSet])
+  
+}
+  
+
+
+
+#' @useDynLib pharos, .registration = TRUE
+
+
+#' @importFrom Rcpp sourceCpp
+#' 
+#' @importFrom graphics plot hist abline par points text axTicks axis grid layout lines mtext rect title polygon strheight strwidth clip  image grconvertX grconvertY segments barplot box matplot layout.show arrows plot.new plot.window close.screen screen split.screen rug curve contour persp boxplot cdplot frame spineplot
+#'             
+#' @importFrom grDevices rgb col2rgb rgb2hsv colors colorRampPalette xy.coords heat.colors dev.size gray.colors rainbow adjustcolor dev.off png dev.cur convertColor
+#'             
+#' @importFrom utils head tail combn modifyList
+#' 
+#' @importFrom stats qt sd as.dendrogram dist hclust order.dendrogram filter relevel setNames is.ts time prop.test predict qnorm formula var model.frame model.response model.weights terms na.omit acf plot.ts pacf complete.cases dnorm quantile uniroot density as.formula chisq.test na.pass lm ftable median pnorm
+#'             
+#' @importFrom stringi stri_sub stri_length stri_pad stri_trim_both stri_extract_first_regex
+#' 
+#' @importFrom bedrock abind %)(% %(]% coalesceX moveAvg binaryTree combPairs decToHex isZero mergeArgs nDec naIf naReplace setNamesX recycle label label<- sortX revX resolveFormula isNA callIf midx getDotsArg linScale locf appendX isLowCardinality resolveFormulaFromCall
+#' 
+#' @importFrom base64enc base64encode
+NULL

@@ -1,0 +1,88 @@
+Package: pharos
+Title: Descriptive Statistics Graphics and Utilities
+Version: 0.1.6
+Authors@R: c(
+  person(given="Andri", family="Signorell", 
+         email = "andri@signorell.net", 
+         role = c("aut", "cre"),
+         comment = c(ORCID = "0000-0003-4311-1969")),
+  person("R Core Team"                    , role = c("ctb")),
+  person("Ben"          , "Bolker"        , role = c("ctb")),
+  person("Jeff"         , "Enos"          , role = c("ctb")),
+  person("Maxime"       , "Genest"        , role = "ctb",
+         comment = "Fortran code of package 'depth'"),
+  person("Frank E."     , "Harrell Jr"    , role = c("ctb")),
+  person("Henk"         , "Harmsen"       , role = c("ctb")),
+  person("Christian W." , "Hoffmann"      , role = c("ctb")),
+  person("Markus"       , "Huerzeler"     , role = c("ctb")),
+  person("Matthias"     , "Kohl"          , role = c("ctb")),
+  person("Jim"          , "Lemon"         , role = c("ctb")),
+  person("Arni"         , "Magnusson"     , role = c("ctb")),
+  person("Jean-Claude"  , "Massé"         , role = "ctb",
+         comment = "Fortran code of package 'depth'"),
+  person("Markus"       , "Naepflin"      , role = c("ctb")),
+  person("Jean-François", "Plante"        , role = "ctb",
+         comment = "Fortran code of package 'depth'"),
+  person("B. D."        , "Ripley"        , role = c("ctb")),
+  person("Peter J."     , "Rousseeuw"     , role = c("ctb", "cph"),
+       comment = "Algorithm AS 307 (halfspace depth)"),
+  person("Ida"          , "Ruts"          , role = c("ctb", "cph"),
+         comment = "Algorithm AS 307 (halfspace depth)"),
+  person("Terry"        , "Therneau"      , role = c("ctb")),
+  person("John"         , "Verzani"       , role = c("ctb")),
+  person("W. N."        , "Venables"      , role = c("ctb")),
+  person("Hans Peter"   , "Wolf"          , role = c("ctb")),
+  person("Ying"         , "Wu"            , role = c("ctb"))
+ )
+Description: Draws the statistical graphics of the 'DescToolsX' ecosystem
+    on top of base graphics: distribution and density displays,
+    bivariate and categorical plots, diagnostic and model evaluation
+    panels, and a faceting mechanism for arranging them. A theme system
+    resolves colours, symbols and layout centrally, so a consistent look
+    can be set once rather than repeated at every call. The package also
+    contains the colour conversion and palette tools, the geometry
+    helpers, the number and string formatting routines and the HTML
+    output utilities that the plots are built from. It is self contained
+    and usable without the rest of the suite.
+Depends: R (>= 4.6.0)
+License: GPL (>= 2)
+Encoding: UTF-8
+LinkingTo: Rcpp
+Imports: Rcpp, bedrock (>= 0.1.18), MASS, cli, withr, stringi, methods,
+        base64enc, grid
+Suggests: testthat (>= 3.0.0), R.rsp, hexbin, prettyunits, pdftools
+Config/testthat/edition: 3
+VignetteBuilder: R.rsp
+URL: https://andrisignorell.github.io/pharos/,
+        https://github.com/AndriSignorell/pharos/
+BugReports: https://github.com/AndriSignorell/pharos/issues
+Config/roxygen2/version: 8.1.1
+NeedsCompilation: yes
+Packaged: 2026-11-03 23:02:06 UTC; andri
+Author: Andri Signorell [aut, cre] (ORCID:
+    <https://orcid.org/0000-0003-4311-1969>),
+  R Core Team [ctb],
+  Ben Bolker [ctb],
+  Jeff Enos [ctb],
+  Maxime Genest [ctb] (Fortran code of package 'depth'),
+  Frank E. Harrell Jr [ctb],
+  Henk Harmsen [ctb],
+  Christian W. Hoffmann [ctb],
+  Markus Huerzeler [ctb],
+  Matthias Kohl [ctb],
+  Jim Lemon [ctb],
+  Arni Magnusson [ctb],
+  Jean-Claude Massé [ctb] (Fortran code of package 'depth'),
+  Markus Naepflin [ctb],
+  Jean-François Plante [ctb] (Fortran code of package 'depth'),
+  B. D. Ripley [ctb],
+  Peter J. Rousseeuw [ctb, cph] (Algorithm AS 307 (halfspace depth)),
+  Ida Ruts [ctb, cph] (Algorithm AS 307 (halfspace depth)),
+  Terry Therneau [ctb],
+  John Verzani [ctb],
+  W. N. Venables [ctb],
+  Hans Peter Wolf [ctb],
+  Ying Wu [ctb]
+Maintainer: Andri Signorell <andri@signorell.net>
+Repository: CRAN
+Date/Publication: 2026-11-25 12:20:02 UTC

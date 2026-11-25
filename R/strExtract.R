@@ -1,0 +1,50 @@
+
+#' Extract First Match from Strings
+#'
+#' Extracts the first substring matching a regular expression from each
+#' element of a character vector.
+#'
+#' @param x a character vector
+#' @param pattern a character string containing a regular expression to match
+#' @param ... additional arguments passed to
+#'   [stringi::stri_extract_first_regex()]
+#'
+#' @return A character vector containing the first match for each element of
+#'   `x`. If no match is found, `NA` is returned.
+#'
+#' @details
+#' This function is a thin wrapper around
+#' [stringi::stri_extract_first_regex()] providing a simplified
+#' interface for extracting the first match of a pattern.
+#'
+#' @seealso [stringi::stri_extract_first_regex()],
+#'   [strExtractBetween()]
+#'
+#' @examples
+#' x <- c("abc123", "no digits", "456xyz")
+#'
+#' # extract first number
+#' strExtract(x, "\\d+")
+#'
+#' # extract words
+#' strExtract("hello world", "\\w+")
+#'
+
+
+
+
+#' @seealso
+#' [string-overview] for an overview of all string utilities in pharos.
+#'
+#' @concept string-manipulation
+#' @concept pattern-matching
+#'
+#'
+#' @export
+strExtract <- function(x, pattern, ...) {
+  
+  res <- stringi::stri_extract_first_regex(x, pattern, ...)
+  
+  res[is.na(res)] <- NA_character_
+  res
+}
